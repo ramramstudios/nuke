@@ -67,6 +67,14 @@ RESEND_API_KEY=re_...
 
 By default, the app stays in `dry-run` mode and records a synthetic provider message id without sending.
 
+If you want a one-command live pilot once Node 22 is available, use:
+
+```bash
+EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
+```
+
+That command will install dependencies, prepare `.env`, switch delivery to `resend`, push the Prisma schema, seed brokers, and start the dev server.
+
 ---
 
 ## Architecture

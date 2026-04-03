@@ -118,6 +118,39 @@ ensure_secret_line() {
   fi
 }
 
+read_env_value() {
+  local key="$1"
+  awk -F'"' -v key="$key" '$0 ~ "^" key "=" { print $2 }' .env | tail -n 1
+}
+
+ensure_default_line() {
+  local key="$1"
+  local value="$2"
+
+  if ! grep -q "^${key}=" .env; then
+    printf '%s="%s"\n' "$key" "$value" >> .env
+    log "Added ${key} to .env"
+  fi
+}
+
+ensure_app_defaults() {
+  ensure_env_file
+  ensure_default_line "NEXT_PUBLIC_APP_URL" "http://localhost:3000"
+  ensure_default_line "EMAIL_DELIVERY_MODE" "dry-run"
+  ensure_default_line "EMAIL_FROM" "privacy@example.com"
+  ensure_default_line "RESEND_API_KEY" ""
+}
+
+sync_env_from_shell_if_present() {
+  local key="$1"
+  local shell_value="${!key:-}"
+
+  if [[ -n "$shell_value" ]]; then
+    ensure_secret_line "$key" "$shell_value"
+    log "Loaded ${key} from shell into .env"
+  fi
+}
+
 generate_secrets_if_needed() {
   ensure_env_file
 
@@ -156,6 +189,59 @@ install_deps() {
 setup_env() {
   ensure_runtime
   generate_secrets_if_needed
+  ensure_app_defaults
+}
+
+count_email_brokers() {
+  if [[ -f src/lib/brokers/registry.ts ]]; then
+    grep -c 'removalMethod: "email"' src/lib/brokers/registry.ts || true
+    return 0
+  fi
+
+  printf '0\n'
+}
+
+configure_email_mode() {
+  local mode="$1"
+  ensure_app_defaults
+  ensure_secret_line "EMAIL_DELIVERY_MODE" "$mode"
+}
+
+validate_live_email_env() {
+  local email_from resend_key
+  email_from="$(read_env_value EMAIL_FROM)"
+  resend_key="$(read_env_value RESEND_API_KEY)"
+
+  if [[ -z "$email_from" || "$email_from" == "privacy@example.com" ]]; then
+    die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
+  fi
+
+  if [[ -z "$resend_key" ]]; then
+    die "RESEND_API_KEY must be set for live email delivery. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
+  fi
+}
+
+configure_email_dry_run_env() {
+  configure_email_mode "dry-run"
+}
+
+configure_email_live_env() {
+  sync_env_from_shell_if_present "EMAIL_FROM"
+  sync_env_from_shell_if_present "RESEND_API_KEY"
+  configure_email_mode "resend"
+  validate_live_email_env
+}
+
+show_email_pilot_summary() {
+  local mode="$1"
+  local brokers
+  brokers="$(count_email_brokers)"
+
+  if [[ "$mode" == "resend" ]]; then
+    log "Live email pilot ready. ${brokers} broker entries use direct email delivery. Start the app, complete onboarding, then click Submit Removal to trigger real outbound email."
+  else
+    log "Dry-run email pilot ready. ${brokers} broker entries use direct email delivery, but sends will stay simulated until you switch EMAIL_DELIVERY_MODE to resend."
+  fi
 }
 
 db_push() {
@@ -216,13 +302,59 @@ bootstrap_prod() {
   start_prod
 }
 
+bootstrap_email_dry_run() {
+  install_deps
+  setup_env
+  configure_email_dry_run_env
+  db_push
+  db_seed
+  show_email_pilot_summary "dry-run"
+  dev_server
+}
+
+bootstrap_email_live() {
+  install_deps
+  setup_env
+  configure_email_live_env
+  db_push
+  db_seed
+  show_email_pilot_summary "resend"
+  dev_server
+}
+
 doctor() {
   ensure_runtime
+  local email_mode="missing"
+  local email_from_status="missing"
+  local resend_status="missing"
+
+  if [[ -f .env ]]; then
+    local email_from resend_key
+    email_mode="$(read_env_value EMAIL_DELIVERY_MODE)"
+    email_from="$(read_env_value EMAIL_FROM)"
+    resend_key="$(read_env_value RESEND_API_KEY)"
+
+    if [[ -n "$email_from" && "$email_from" != "privacy@example.com" ]]; then
+      email_from_status="set"
+    else
+      email_from_status="placeholder"
+    fi
+
+    if [[ -n "$resend_key" ]]; then
+      resend_status="set"
+    else
+      resend_status="missing"
+    fi
+  fi
+
   printf 'Project: %s\n' "$ROOT_DIR"
   printf 'Node:    %s\n' "$(node -v)"
   printf 'npm:     %s\n' "$(npm -v)"
   printf '.env:    %s\n' "$([[ -f .env ]] && echo present || echo missing)"
   printf 'DB file: %s\n' "$([[ -f prisma/dev.db ]] && echo present || echo missing)"
+  printf 'Email:   %s\n' "${email_mode:-missing}"
+  printf 'From:    %s\n' "$email_from_status"
+  printf 'Resend:  %s\n' "$resend_status"
 }
 
 print_help() {
@@ -243,8 +375,12 @@ Commands:
   build           Build the production bundle
   prod            Build and start the production server
   start           Start the production server
+  email-dry-run   Prepare env for the email pilot in dry-run mode, then run dev
+  email-live      Prepare env for the live Resend email pilot, then run dev
   full-dev        Alias for bootstrap-dev
   full-prod       Alias for bootstrap-prod
+  bootstrap-email-dry-run  Alias for email-dry-run
+  bootstrap-email-live     Alias for email-live
   bootstrap-dev   Install, prepare env, push schema, seed, then run dev
   bootstrap-prod  Install, prepare env, push schema, seed, build, then run prod
   help            Show this help
@@ -255,6 +391,8 @@ Notes:
     Example:
       export NODE_BIN_DIR="/usr/local/opt/node@22/bin"
       ./script.sh bootstrap-dev
+  - For a real email pilot, pass your verified sender and Resend key:
+      EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-live
 EOF
 }
 
@@ -273,6 +411,8 @@ NUKE startup menu
   10. Start production server
   11. Bootstrap full dev flow
   12. Bootstrap full prod flow
+  13. Email pilot (dry-run)
+  14. Email pilot (live Resend send)
   0. Exit
 EOF
 
@@ -292,6 +432,8 @@ EOF
     10) start_prod ;;
     11) bootstrap_dev ;;
     12) bootstrap_prod ;;
+    13) bootstrap_email_dry_run ;;
+    14) bootstrap_email_live ;;
     0) exit 0 ;;
     *) die "Unknown option: $choice" ;;
   esac
@@ -313,6 +455,8 @@ main() {
     build) build_app ;;
     prod) build_app; start_prod ;;
     start) start_prod ;;
+    email-dry-run|bootstrap-email-dry-run) bootstrap_email_dry_run ;;
+    email-live|bootstrap-email-live) bootstrap_email_live ;;
     full-dev|bootstrap-dev) bootstrap_dev ;;
     full-prod|bootstrap-prod) bootstrap_prod ;;
     help|-h|--help) print_help ;;
