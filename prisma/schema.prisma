@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  verified      Boolean  @default(false)
+  verifyToken   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       UserProfile?
+  deletionRequests DeletionRequest[]
+  customRequests   CustomRequest[]
+  scans            Scan[]
+}
+
+// PII fields stored as encrypted JSON blobs
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Encrypted blobs — decrypted at runtime
+  fullNames       String   // encrypted JSON array: ["John Doe", "J. Doe"]
+  emails          String   // encrypted JSON array
+  phones          String   // encrypted JSON array
+  addresses       String   // encrypted JSON array of {street, city, state, zip}
+
+  // Optional identifiers
+  advertisingIds  String?  // encrypted JSON array
+  vin             String?  // encrypted
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── Brokers ─────────────────────────────────────────────────
+
+model Broker {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  domain          String
+  category        String   // people_search | marketing | analytics | data_broker | other
+  searchMethod    String   // url_pattern | api | scrape
+  removalMethod   String   // api | form | email | manual_link
+  removalEndpoint String?  // URL, email address, or API endpoint
+  slaInDays       Int      @default(45)
+  tier            Int      @default(1) // 1 = automated MVP, 2 = extensible
+  active          Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  requests        RemovalRequest[]
+  exposures       Exposure[]
+}
+
+// ─── Unified Deletion Requests (DROP-style) ─────────────────
+
+model DeletionRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Snapshot of user data at submission time (encrypted)
+  payloadSnapshot String
+
+  status          String   @default("pending") // pending | dispatching | active | completed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  removalRequests RemovalRequest[]
+}
+
+// ─── Per-Broker Removal Requests ────────────────────────────
+
+model RemovalRequest {
+  id                String   @id @default(cuid())
+  deletionRequestId String
+  deletionRequest   DeletionRequest @relation(fields: [deletionRequestId], references: [id], onDelete: Cascade)
+
+  brokerId          String
+  broker            Broker   @relation(fields: [brokerId], references: [id])
+
+  method            String   // api | form | email | manual_link
+  status            String   @default("pending")
+  // pending | submitted | requires_user_action | acknowledged | completed | rejected
+
+  removalUrl        String?  // for manual_link fallback
+  rejectionReason   String?
+  submittedAt       DateTime?
+  acknowledgedAt    DateTime?
+  completedAt       DateTime?
+  deadline          DateTime? // submittedAt + broker.slaInDays
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─── Scans & Exposure Detection ─────────────────────────────
+
+model Scan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("pending") // pending | running | completed | failed
+  startedAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+
+  exposures Exposure[]
+}
+
+model Exposure {
+  id          String   @id @default(cuid())
+  scanId      String
+  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  brokerId    String?
+  broker      Broker?  @relation(fields: [brokerId], references: [id])
+
+  sourceUrl   String
+  dataFound   String   // JSON: what PII was detected
+  confidence  Float    @default(0.5) // 0-1
+
+  createdAt   DateTime @default(now())
+}
+
+// ─── Custom / Ad-hoc Removal Requests ───────────────────────
+
+model CustomRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  targetUrl   String
+  status      String   @default("pending")
+  // pending | scanning | submitted | requires_user_action | completed
+
+  removalUrl  String?  // discovered opt-out link
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
