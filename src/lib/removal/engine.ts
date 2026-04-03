@@ -67,7 +67,7 @@ export async function processRemoval(requestId: string): Promise<void> {
         });
         break;
     }
-  } catch (error) {
+  } catch {
     // If primary method fails, try fallback to manual link
     const fallbackUrl = await discoverRemovalLink(req.broker.domain);
     await prisma.removalRequest.update({
@@ -151,11 +151,11 @@ export function generateDeletionEmailTemplate(
   userName: string,
   brokerName: string
 ): string {
-  return `Subject: Personal Data Deletion Request — ${userName}
+  return `Subject: Personal Data Deletion Request for ${brokerName} — ${userName}
 
 To Whom It May Concern,
 
-I am writing to request the deletion of all personal information you hold about me, pursuant to my rights under the California Consumer Privacy Act (CCPA), the General Data Protection Regulation (GDPR), and any other applicable data protection laws.
+I am writing to request the deletion of all personal information ${brokerName} holds about me, pursuant to my rights under the California Consumer Privacy Act (CCPA), the General Data Protection Regulation (GDPR), and any other applicable data protection laws.
 
 My details:
 Name: ${userName}

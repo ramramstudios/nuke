@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SLACountdown } from "@/components/SLACountdown";
@@ -34,6 +34,13 @@ interface CustomReq {
   createdAt: string;
 }
 
+interface DashboardData {
+  user: { email: string; hasProfile: boolean };
+  summary: Summary | null;
+  requests: RemovalRequest[];
+  customRequests: CustomReq[];
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ email: string; hasProfile: boolean } | null>(null);
@@ -46,18 +53,15 @@ export default function DashboardPage() {
   // Custom request form
   const [customUrl, setCustomUrl] = useState("");
 
-  const load = useCallback(async () => {
+  async function fetchDashboardData(): Promise<DashboardData | null> {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
-      router.push("/onboarding");
-      return;
+      return null;
     }
-    const me = await meRes.json();
-    setUser(me);
+    const me = await meRes.json() as { email: string; hasProfile: boolean };
 
     if (!me.hasProfile) {
-      router.push("/onboarding");
-      return;
+      return null;
     }
 
     const [summaryRes, detailRes, customRes] = await Promise.all([
@@ -66,28 +70,63 @@ export default function DashboardPage() {
       fetch("/api/custom-request"),
     ]);
 
-    if (summaryRes.ok) setSummary(await summaryRes.json());
-    if (detailRes.ok) setRequests(await detailRes.json());
-    if (customRes.ok) setCustomRequests(await customRes.json());
+    return {
+      user: me,
+      summary: summaryRes.ok ? await summaryRes.json() : null,
+      requests: detailRes.ok ? await detailRes.json() : [],
+      customRequests: customRes.ok ? await customRes.json() : [],
+    };
+  }
+
+  function applyDashboardData(data: DashboardData) {
+    setUser(data.user);
+    setSummary(data.summary);
+    setRequests(data.requests);
+    setCustomRequests(data.customRequests);
     setLoading(false);
-  }, [router]);
+  }
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+
+    async function loadDashboard() {
+      const data = await fetchDashboardData();
+      if (cancelled) return;
+      if (!data) {
+        router.push("/onboarding");
+        return;
+      }
+      applyDashboardData(data);
+    }
+
+    void loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  async function refreshDashboard() {
+    const data = await fetchDashboardData();
+    if (!data) {
+      router.push("/onboarding");
+      return;
+    }
+    applyDashboardData(data);
+  }
 
   async function handleScan() {
     setActionLoading("scan");
     await fetch("/api/scan", { method: "POST" });
     setActionLoading("");
-    load();
+    await refreshDashboard();
   }
 
   async function handleSubmitRemoval() {
     setActionLoading("remove");
     await fetch("/api/requests", { method: "POST" });
     setActionLoading("");
-    load();
+    await refreshDashboard();
   }
 
   async function handleCustomRequest(e: React.FormEvent) {
@@ -101,7 +140,7 @@ export default function DashboardPage() {
     });
     setCustomUrl("");
     setActionLoading("");
-    load();
+    await refreshDashboard();
   }
 
   if (loading) {
