@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth/jwt";
 import { submitDeletionRequest } from "@/lib/dispatcher/dispatch";
+import { processAllPending } from "@/lib/removal/engine";
 import { getComplianceSummary, getDetailedStatus } from "@/lib/compliance/tracker";
 
 /** POST: Submit a new centralized deletion request */
@@ -11,7 +12,14 @@ export async function POST() {
   }
 
   const result = await submitDeletionRequest(userId);
-  return NextResponse.json(result);
+  const processed = await processAllPending(result.deletionRequestId, {
+    methods: ["email"],
+  });
+
+  return NextResponse.json({
+    ...result,
+    emailRequestsProcessed: processed.processed,
+  });
 }
 
 /** GET: Get compliance summary + detailed broker statuses */

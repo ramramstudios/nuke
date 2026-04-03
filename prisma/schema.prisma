@@ -99,9 +99,14 @@ model RemovalRequest {
   removalUrl        String?  // for manual_link fallback
   rejectionReason   String?
   submittedAt       DateTime?
+  sentAt            DateTime?
   acknowledgedAt    DateTime?
   completedAt       DateTime?
   deadline          DateTime? // submittedAt + broker.slaInDays
+  providerMessageId String?
+  lastError         String?
+  attemptCount      Int      @default(0)
+  lastAttemptAt     DateTime?
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

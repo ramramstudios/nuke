@@ -57,6 +57,16 @@ Open [http://localhost:3000](http://localhost:3000).
 6. Requests with `requires_user_action` status show direct removal links
 7. Hit `POST /api/simulate` to advance the simulation (brokers acknowledge/complete)
 
+Email-method brokers can now be piloted with real outbound delivery by setting:
+
+```bash
+EMAIL_DELIVERY_MODE=resend
+EMAIL_FROM=privacy@yourdomain.com
+RESEND_API_KEY=re_...
+```
+
+By default, the app stays in `dry-run` mode and records a synthetic provider message id without sending.
+
 ---
 
 ## Architecture
@@ -172,7 +182,8 @@ Every `RemovalRequest` tracks:
 This is a prototype focused on architecture, not production readiness:
 
 - **Scan results are simulated** — random probability based on broker category
-- **Removal methods are stubbed** — no real HTTP calls, Playwright, or SMTP
+- **Form and API removal methods are still stubbed** — no real HTTP calls or Playwright automation yet
+- **Email brokers support a phase 1 pilot** via Resend; broker acknowledgements/completions are still simulated
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
 - **No Redis/BullMQ** — background jobs run synchronously via API calls

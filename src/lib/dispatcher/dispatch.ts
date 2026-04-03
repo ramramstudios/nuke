@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "@/lib/db";
-import { encryptJSON } from "@/lib/crypto/encrypt";
+import { createRemovalProfileSnapshot } from "@/lib/removal/profile";
 
 interface DispatchResult {
   deletionRequestId: string;
@@ -29,12 +29,7 @@ export async function submitDeletionRequest(
   if (!profile) throw new Error("User profile not found — complete onboarding first");
 
   // Snapshot the profile data at submission time
-  const payloadSnapshot = encryptJSON({
-    fullNames: profile.fullNames,
-    emails: profile.emails,
-    phones: profile.phones,
-    addresses: profile.addresses,
-  });
+  const payloadSnapshot = createRemovalProfileSnapshot(profile);
 
   const deletionRequest = await prisma.deletionRequest.create({
     data: {
