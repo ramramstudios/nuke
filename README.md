@@ -23,6 +23,22 @@ nvm install 22
 nvm use 22
 ```
 
+If Homebrew installs Node 22 but your shell still uses an older Node, add the repo-friendly path fix:
+
+```bash
+# Intel Macs
+echo 'export NODE_BIN_DIR="/usr/local/opt/node@22/bin"' >> ~/.zshrc
+echo 'export PATH="$NODE_BIN_DIR:$PATH"' >> ~/.zshrc
+
+# Apple Silicon Macs
+# echo 'export NODE_BIN_DIR="/opt/homebrew/opt/node@22/bin"' >> ~/.zshrc
+# echo 'export PATH="$NODE_BIN_DIR:$PATH"' >> ~/.zshrc
+
+source ~/.zshrc
+node -v
+npm -v
+```
+
 ### Setup
 
 ```bash
@@ -46,6 +62,25 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Spin Up Commands
+
+For the email automation pilot, the quickest path is:
+
+```bash
+# 1. Make sure Node 22 is active in this shell
+export NODE_BIN_DIR="${NODE_BIN_DIR:-/usr/local/opt/node@22/bin}"
+export PATH="$NODE_BIN_DIR:$PATH"
+
+# 2. Launch the live email pilot
+EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
+```
+
+If you want a safe rehearsal first, use:
+
+```bash
+./script.sh email-dry-run
+```
 
 ### First Run Walkthrough
 
