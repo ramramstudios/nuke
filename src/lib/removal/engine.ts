@@ -7,11 +7,17 @@
  *   3. Email request
  *   4. Fallback: discover user-actionable link
  *
- * MVP: all methods are simulated. Each case updates the request status
- * so the dashboard and compliance tracker can reflect progress.
+ * MVP: API/form methods are still simulated. Email brokers can now use
+ * a phase 1 outbound delivery flow, while broker responses remain simulated.
  */
 
 import { prisma } from "@/lib/db";
+import { buildBrokerDeletionEmail } from "@/lib/removal/email-template";
+import {
+  deliverBrokerEmail,
+  logBrokerEmailFailure,
+} from "@/lib/removal/email-delivery";
+import { decodeRemovalProfileSnapshot } from "@/lib/removal/profile";
 
 /**
  * Process a single removal request.
@@ -19,7 +25,12 @@ import { prisma } from "@/lib/db";
 export async function processRemoval(requestId: string): Promise<void> {
   const req = await prisma.removalRequest.findUnique({
     where: { id: requestId },
-    include: { broker: true },
+    include: {
+      broker: true,
+      deletionRequest: {
+        select: { payloadSnapshot: true },
+      },
+    },
   });
   if (!req || req.status !== "pending") return;
 
@@ -46,15 +57,30 @@ export async function processRemoval(requestId: string): Promise<void> {
         });
         break;
 
-      case "email":
-        await sendDeletionEmail(req.broker.removalEndpoint);
+      case "email": {
+        const emailResult = await sendDeletionEmail({
+          brokerName: req.broker.name,
+          payloadSnapshot: req.deletionRequest.payloadSnapshot,
+          requestId: req.id,
+          to: req.broker.removalEndpoint,
+        });
         await prisma.removalRequest.update({
           where: { id: req.id },
-          data: { status: "submitted", submittedAt: now, deadline },
+          data: {
+            status: "submitted",
+            submittedAt: now,
+            sentAt: now,
+            deadline,
+            providerMessageId: emailResult.providerMessageId,
+            lastError: null,
+            lastAttemptAt: now,
+            attemptCount: { increment: 1 },
+          },
         });
         break;
+      }
 
-      case "manual_link":
+      case "manual_link": {
         const removalUrl = await discoverRemovalLink(req.broker.domain);
         await prisma.removalRequest.update({
           where: { id: req.id },
@@ -66,8 +92,10 @@ export async function processRemoval(requestId: string): Promise<void> {
           },
         });
         break;
+      }
     }
-  } catch {
+  } catch (error) {
+    const safeError = toSafeErrorMessage(error);
     // If primary method fails, try fallback to manual link
     const fallbackUrl = await discoverRemovalLink(req.broker.domain);
     await prisma.removalRequest.update({
@@ -78,6 +106,13 @@ export async function processRemoval(requestId: string): Promise<void> {
         method: "manual_link",
         submittedAt: now,
         deadline,
+        ...(req.method === "email"
+          ? {
+              lastError: safeError,
+              lastAttemptAt: now,
+              attemptCount: { increment: 1 },
+            }
+          : {}),
       },
     });
   }
@@ -87,10 +122,15 @@ export async function processRemoval(requestId: string): Promise<void> {
  * Process all pending removal requests for a deletion request.
  */
 export async function processAllPending(
-  deletionRequestId: string
+  deletionRequestId: string,
+  options?: { methods?: string[] }
 ): Promise<{ processed: number }> {
   const pending = await prisma.removalRequest.findMany({
-    where: { deletionRequestId, status: "pending" },
+    where: {
+      deletionRequestId,
+      status: "pending",
+      ...(options?.methods ? { method: { in: options.methods } } : {}),
+    },
   });
 
   for (const req of pending) {
@@ -115,10 +155,33 @@ async function attemptFormRemoval(endpoint: string | null): Promise<void> {
   await delay(200);
 }
 
-async function sendDeletionEmail(emailAddress: string | null): Promise<void> {
-  // TODO: Send via SMTP/transactional email service
-  if (!emailAddress) throw new Error("No email address configured");
-  await delay(100);
+async function sendDeletionEmail(input: {
+  brokerName: string;
+  payloadSnapshot: string;
+  requestId: string;
+  to: string | null;
+}): Promise<{ providerMessageId: string }> {
+  if (!input.to) throw new Error("No email address configured");
+
+  const profile = decodeRemovalProfileSnapshot(input.payloadSnapshot);
+  const message = buildBrokerDeletionEmail(profile, input.brokerName);
+
+  const outboundMessage = {
+    brokerName: input.brokerName,
+    requestId: input.requestId,
+    to: input.to,
+    subject: message.subject,
+    text: message.text,
+    replyTo: message.replyTo,
+  };
+
+  try {
+    const result = await deliverBrokerEmail(outboundMessage);
+    return { providerMessageId: result.providerMessageId };
+  } catch (error) {
+    logBrokerEmailFailure(outboundMessage, toSafeErrorMessage(error));
+    throw error;
+  }
 }
 
 /**
@@ -151,24 +214,23 @@ export function generateDeletionEmailTemplate(
   userName: string,
   brokerName: string
 ): string {
-  return `Subject: Personal Data Deletion Request for ${brokerName} — ${userName}
+  return buildBrokerDeletionEmail(
+    {
+      fullNames: [userName],
+      emails: [],
+      phones: [],
+      addresses: [],
+      advertisingIds: [],
+      vin: null,
+    },
+    brokerName
+  ).text;
+}
 
-To Whom It May Concern,
+function toSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message.slice(0, 500);
+  }
 
-I am writing to request the deletion of all personal information ${brokerName} holds about me, pursuant to my rights under the California Consumer Privacy Act (CCPA), the General Data Protection Regulation (GDPR), and any other applicable data protection laws.
-
-My details:
-Name: ${userName}
-
-Please confirm within 45 days that:
-1. All my personal data has been identified
-2. All personal data has been permanently deleted
-3. Any third parties with whom my data was shared have been notified
-
-If you are unable to fulfill this request, please provide a detailed explanation.
-
-Thank you for your prompt attention to this matter.
-
-Sincerely,
-${userName}`;
+  return "Outbound request failed";
 }
