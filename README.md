@@ -112,6 +112,15 @@ EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
 
 That command will install dependencies, prepare `.env`, switch delivery to `resend`, push the Prisma schema, seed brokers, and start the dev server.
 
+To run the Phase 1 live smoke test against one real email broker after you complete onboarding, use:
+
+```bash
+./script.sh email-brokers
+EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-smoke-test you@example.com "PeopleFinder"
+```
+
+The smoke test sends one live broker email, then prints the stored `providerMessageId`, request ids, status, and timestamps from the database so you can confirm real provider acceptance.
+
 ---
 
 ## Architecture

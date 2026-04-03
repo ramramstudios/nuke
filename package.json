@@ -10,7 +10,8 @@
     "db:push": "npx prisma db push",
     "db:seed": "node --import tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
-    "db:reset": "npx prisma db push --force-reset && npm run db:seed"
+    "db:reset": "npx prisma db push --force-reset && npm run db:seed",
+    "smoke:email": "node --import tsx scripts/email-smoke-test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

@@ -150,7 +150,7 @@ is_verified_sender_value() {
   fi
 
   case "$value" in
-    "privacy@example.com"|"your-verified-resend-sender.com")
+    "privacy@example.com"|"your-verified-resend-sender.com"|"your-verified-resend-sender@yourdomain.com")
       return 1
       ;;
   esac
@@ -248,11 +248,11 @@ validate_live_email_env() {
   resend_key="$(read_env_value RESEND_API_KEY)"
 
   if ! is_verified_sender_value "$email_from"; then
-    die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
+    die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live or ./script.sh email-smoke-test you@example.com \"PeopleFinder\""
   fi
 
   if [[ -z "$resend_key" ]]; then
-    die "RESEND_API_KEY must be set for live email delivery. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
+    die "RESEND_API_KEY must be set for live email delivery. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live or ./script.sh email-smoke-test you@example.com \"PeopleFinder\""
   fi
 }
 
@@ -357,6 +357,25 @@ bootstrap_email_live() {
   dev_server
 }
 
+list_email_brokers() {
+  setup_env
+  run_npm run smoke:email -- --list-brokers
+}
+
+email_smoke_test() {
+  local user_email="${1:-${SMOKE_TEST_USER_EMAIL:-}}"
+  local broker_name="${2:-${SMOKE_TEST_BROKER_NAME:-PeopleFinder}}"
+
+  if [[ -z "$user_email" ]]; then
+    die "Provide the smoke test user email as './script.sh email-smoke-test user@example.com [Broker Name]' or set SMOKE_TEST_USER_EMAIL."
+  fi
+
+  setup_env
+  configure_email_live_env
+  log "Running live email smoke test for broker: ${broker_name}"
+  run_npm run smoke:email -- --user "$user_email" --broker "$broker_name"
+}
+
 doctor() {
   ensure_runtime
   local email_mode="missing"
@@ -412,6 +431,8 @@ Commands:
   start           Start the production server
   email-dry-run   Prepare env for the email pilot in dry-run mode, then run dev
   email-live      Prepare env for the live Resend email pilot, then run dev
+  email-brokers   List the email-method brokers available for smoke testing
+  email-smoke-test  Send one live broker email for an onboarded user profile
   full-dev        Alias for bootstrap-dev
   full-prod       Alias for bootstrap-prod
   bootstrap-email-dry-run  Alias for email-dry-run
@@ -428,6 +449,8 @@ Notes:
       ./script.sh bootstrap-dev
   - For a real email pilot, pass your verified sender and Resend key:
       EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-live
+  - For a one-broker live smoke test after onboarding:
+      EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-smoke-test you@example.com "PeopleFinder"
 EOF
 }
 
@@ -448,6 +471,8 @@ NUKE startup menu
   12. Bootstrap full prod flow
   13. Email pilot (dry-run)
   14. Email pilot (live Resend send)
+  15. List smoke-test email brokers
+  16. Run live email smoke test
   0. Exit
 EOF
 
@@ -469,6 +494,15 @@ EOF
     12) bootstrap_prod ;;
     13) bootstrap_email_dry_run ;;
     14) bootstrap_email_live ;;
+    15) list_email_brokers ;;
+    16)
+      local user_email broker_name
+      printf '\nSmoke test user email: '
+      read -r user_email
+      printf 'Broker name [%s]: ' "PeopleFinder"
+      read -r broker_name
+      email_smoke_test "$user_email" "${broker_name:-PeopleFinder}"
+      ;;
     0) exit 0 ;;
     *) die "Unknown option: $choice" ;;
   esac
@@ -476,6 +510,9 @@ EOF
 
 main() {
   local command="${1:-menu}"
+  if [[ $# -gt 0 ]]; then
+    shift
+  fi
 
   case "$command" in
     menu) show_menu ;;
@@ -490,6 +527,8 @@ main() {
     build) build_app ;;
     prod) build_app; start_prod ;;
     start) start_prod ;;
+    email-brokers) list_email_brokers ;;
+    email-smoke-test) email_smoke_test "$@" ;;
     email-dry-run|bootstrap-email-dry-run) bootstrap_email_dry_run ;;
     email-live|bootstrap-email-live) bootstrap_email_live ;;
     full-dev|bootstrap-dev) bootstrap_dev ;;
@@ -499,4 +538,4 @@ main() {
   esac
 }
 
-main "${1:-menu}"
+main "$@"
