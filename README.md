@@ -76,6 +76,8 @@ export PATH="$NODE_BIN_DIR:$PATH"
 EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
 ```
 
+If you install Node with `nvm` or the official Node installer instead of Homebrew, run `unset NODE_BIN_DIR` first so the script uses your active `node` from `PATH`.
+
 If you want a safe rehearsal first, use:
 
 ```bash

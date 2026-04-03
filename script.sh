@@ -67,7 +67,12 @@ ensure_runtime() {
   local candidate
 
   if [[ -n "${NODE_BIN_DIR:-}" ]]; then
-    use_node_bin_dir "$NODE_BIN_DIR" || die "NODE_BIN_DIR does not contain working node/npm binaries: $NODE_BIN_DIR"
+    if use_node_bin_dir "$NODE_BIN_DIR"; then
+      :
+    else
+      log "NODE_BIN_DIR does not contain working node/npm binaries: $NODE_BIN_DIR"
+      log "Falling back to PATH and known Node install locations"
+    fi
   fi
 
   if command -v node >/dev/null 2>&1; then
