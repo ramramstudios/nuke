@@ -115,17 +115,47 @@ ensure_env_file() {
 ensure_secret_line() {
   local key="$1"
   local value="$2"
+  local tmp_file
 
-  if grep -q "^${key}=" .env; then
-    perl -0pi -e "s#^${key}=.*#${key}=\"${value}\"#m" .env
-  else
-    printf '%s="%s"\n' "$key" "$value" >> .env
-  fi
+  tmp_file="$(mktemp)"
+
+  awk -v key="$key" -v value="$value" '
+    BEGIN { replaced = 0 }
+    index($0, key "=") == 1 {
+      print key "=\"" value "\""
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) {
+        print key "=\"" value "\""
+      }
+    }
+  ' .env > "$tmp_file"
+
+  mv "$tmp_file" .env
 }
 
 read_env_value() {
   local key="$1"
   awk -F'"' -v key="$key" '$0 ~ "^" key "=" { print $2 }' .env | tail -n 1
+}
+
+is_verified_sender_value() {
+  local value="$1"
+
+  if [[ -z "$value" ]]; then
+    return 1
+  fi
+
+  case "$value" in
+    "privacy@example.com"|"your-verified-resend-sender.com")
+      return 1
+      ;;
+  esac
+
+  [[ "$value" == *"@"* ]]
 }
 
 ensure_default_line() {
@@ -217,7 +247,7 @@ validate_live_email_env() {
   email_from="$(read_env_value EMAIL_FROM)"
   resend_key="$(read_env_value RESEND_API_KEY)"
 
-  if [[ -z "$email_from" || "$email_from" == "privacy@example.com" ]]; then
+  if ! is_verified_sender_value "$email_from"; then
     die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
   fi
 
@@ -339,7 +369,7 @@ doctor() {
     email_from="$(read_env_value EMAIL_FROM)"
     resend_key="$(read_env_value RESEND_API_KEY)"
 
-    if [[ -n "$email_from" && "$email_from" != "privacy@example.com" ]]; then
+    if is_verified_sender_value "$email_from"; then
       email_from_status="set"
     else
       email_from_status="placeholder"

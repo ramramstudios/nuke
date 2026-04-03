@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "npx prisma db push",
-    "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed": "node --import tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma db push --force-reset && npm run db:seed"
   },
