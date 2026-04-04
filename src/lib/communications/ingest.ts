@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { normalizeInboundPayload } from "./normalize";
 import { matchInboundMessage } from "./match";
 import { classifyReply } from "./classify";
+import { maybeGenerateTask } from "@/lib/tasks/generate";
 import type {
   NormalizedInboundMessage,
   MatchResult,
@@ -19,6 +20,7 @@ export interface IngestResult {
   classification: string | null;
   classificationConfidence: number | null;
   requiresReview: boolean;
+  taskId: string | null;
 }
 
 export class InboundValidationError extends Error {
@@ -57,6 +59,15 @@ export async function ingestInboundEmail(
   const classification = classifyReply(normalized, match);
   const record = await persistInboundMessage(normalized, match, classification);
 
+  // Generate user task if the reply is a needs_more_info with enough context
+  let taskId: string | null = null;
+  try {
+    const taskResult = await maybeGenerateTask(record.id, match, classification);
+    taskId = taskResult.taskId;
+  } catch {
+    // Task generation failure should never block ingestion
+  }
+
   logIngestEvent(record.id, normalized.provider, match.status, classification.label);
 
   return {
@@ -70,6 +81,7 @@ export async function ingestInboundEmail(
     classification: classification.label,
     classificationConfidence: classification.confidence,
     requiresReview: classification.requiresReview,
+    taskId,
   };
 }
 

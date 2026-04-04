@@ -34,11 +34,23 @@ interface CustomReq {
   createdAt: string;
 }
 
+interface UserTask {
+  id: string;
+  actionType: string;
+  title: string;
+  instructions: string;
+  actionUrl: string | null;
+  dueAt: string | null;
+  status: string;
+  broker: { name: string; domain: string } | null;
+}
+
 interface DashboardData {
   user: { email: string; hasProfile: boolean };
   summary: Summary | null;
   requests: RemovalRequest[];
   customRequests: CustomReq[];
+  tasks: UserTask[];
 }
 
 export default function DashboardPage() {
@@ -47,6 +59,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [requests, setRequests] = useState<RemovalRequest[]>([]);
   const [customRequests, setCustomRequests] = useState<CustomReq[]>([]);
+  const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
 
@@ -64,10 +77,11 @@ export default function DashboardPage() {
       return null;
     }
 
-    const [summaryRes, detailRes, customRes] = await Promise.all([
+    const [summaryRes, detailRes, customRes, tasksRes] = await Promise.all([
       fetch("/api/requests"),
       fetch("/api/requests?detail=true"),
       fetch("/api/custom-request"),
+      fetch("/api/tasks"),
     ]);
 
     return {
@@ -75,6 +89,7 @@ export default function DashboardPage() {
       summary: summaryRes.ok ? await summaryRes.json() : null,
       requests: detailRes.ok ? await detailRes.json() : [],
       customRequests: customRes.ok ? await customRes.json() : [],
+      tasks: tasksRes.ok ? await tasksRes.json() : [],
     };
   }
 
@@ -83,6 +98,7 @@ export default function DashboardPage() {
     setSummary(data.summary);
     setRequests(data.requests);
     setCustomRequests(data.customRequests);
+    setTasks(data.tasks);
     setLoading(false);
   }
 
@@ -143,6 +159,17 @@ export default function DashboardPage() {
     await refreshDashboard();
   }
 
+  async function handleTaskAction(taskId: string, status: "completed" | "dismissed") {
+    setActionLoading(`task-${taskId}`);
+    await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setActionLoading("");
+    await refreshDashboard();
+  }
+
   if (loading) {
     return (
       <main className="flex-1 flex items-center justify-center">
@@ -185,6 +212,64 @@ export default function DashboardPage() {
           <Card label="Pending Action" value={summary.requiresUserAction} color="text-orange-400" />
           <Card label="Overdue" value={summary.overdue} color="text-red-400" />
         </div>
+      )}
+
+      {/* Action Required Tasks */}
+      {tasks.length > 0 && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Action Required</h2>
+          <div className="space-y-3">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className="bg-orange-950/30 border border-orange-900/50 rounded-lg p-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-orange-200">{task.title}</h3>
+                      <StatusBadge status={task.status} />
+                    </div>
+                    <p className="text-sm text-gray-300 whitespace-pre-line">
+                      {task.instructions.split("\n\nBroker message excerpt:")[0]}
+                    </p>
+                    {task.dueAt && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Due: {new Date(task.dueAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    {task.actionUrl && (
+                      <a
+                        href={task.actionUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium text-center transition-colors"
+                      >
+                        Open link
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleTaskAction(task.id, "completed")}
+                      disabled={!!actionLoading}
+                      className="px-3 py-1.5 bg-green-800 hover:bg-green-700 text-green-200 rounded text-xs font-medium disabled:opacity-50 transition-colors"
+                    >
+                      {actionLoading === `task-${task.id}` ? "..." : "Done"}
+                    </button>
+                    <button
+                      onClick={() => handleTaskAction(task.id, "dismissed")}
+                      disabled={!!actionLoading}
+                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-xs font-medium disabled:opacity-50 transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Broker Requests Table */}

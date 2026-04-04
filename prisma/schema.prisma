@@ -22,6 +22,7 @@ model User {
   deletionRequests DeletionRequest[]
   customRequests   CustomRequest[]
   scans            Scan[]
+  tasks            UserTask[]
 }
 
 // PII fields stored as encrypted JSON blobs
@@ -64,6 +65,7 @@ model Broker {
   requests        RemovalRequest[]
   exposures       Exposure[]
   inboundMessages InboundMessage[]
+  tasks           UserTask[]
 }
 
 // ─── Unified Deletion Requests (DROP-style) ─────────────────
@@ -82,6 +84,7 @@ model DeletionRequest {
 
   removalRequests  RemovalRequest[]
   inboundMessages  InboundMessage[]
+  tasks            UserTask[]
 }
 
 // ─── Per-Broker Removal Requests ────────────────────────────
@@ -115,6 +118,7 @@ model RemovalRequest {
   updatedAt         DateTime @updatedAt
 
   inboundMessages   InboundMessage[]
+  tasks             UserTask[]
 }
 
 // ─── Scans & Exposure Detection ─────────────────────────────
@@ -187,6 +191,37 @@ model InboundMessage {
   rawPayload             String   // JSON blob of the original provider payload
 
   createdAt              DateTime @default(now())
+
+  tasks                  UserTask[]
+}
+
+// ─── User Action Tasks ──────────────────────────────────────
+
+model UserTask {
+  id                  String   @id @default(cuid())
+
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  brokerId            String?
+  broker              Broker?  @relation(fields: [brokerId], references: [id])
+  deletionRequestId   String?
+  deletionRequest     DeletionRequest? @relation(fields: [deletionRequestId], references: [id])
+  removalRequestId    String?
+  removalRequest      RemovalRequest?  @relation(fields: [removalRequestId], references: [id])
+  inboundMessageId    String
+  inboundMessage      InboundMessage   @relation(fields: [inboundMessageId], references: [id])
+
+  actionType          String   // verify_identity | provide_info | click_confirm | reply_to_broker | generic
+  title               String
+  instructions        String
+  actionUrl           String?
+  dueAt               DateTime?
+  status              String   @default("pending") // pending | completed | dismissed | pending_review
+  requiresReview      Boolean  @default(false)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 // ─── Custom / Ad-hoc Removal Requests ───────────────────────

@@ -296,7 +296,14 @@ Broker replies are received via `POST /api/inbound/email`, a webhook-style endpo
    - **noise** — auto-replies, out-of-office, delivery failures, newsletter chatter
    - Messages that don't match any pattern confidently are left unclassified (`null`).
 6. Classification confidence, signal audit trail, and a `requiresReview` flag are persisted alongside the match data. Messages are flagged for review when confidence is low, the match is not fully resolved, or no label could be assigned.
-7. Unmatched and ambiguous messages are stored for later manual review.
+7. When a high-confidence `needs_more_info` reply is matched to a specific removal request, a **UserTask** is auto-generated with:
+   - Action type (verify_identity, provide_info, click_confirm, reply_to_broker, generic)
+   - Plain-language instructions derived from classifier signals
+   - Action URL extracted from the message when available
+   - Due date parsed from the message or defaulting to 10 days
+   - The matched `RemovalRequest` is advanced to `requires_user_action`
+8. Weakly matched or low-confidence `needs_more_info` messages create `pending_review` tasks (or no task at all) instead of user-facing actions.
+9. Unmatched and ambiguous messages are stored for later manual review.
 
 ### Calling the webhook
 
@@ -333,7 +340,7 @@ curl -X POST "http://localhost:3000/api/inbound/email?provider=resend" \
   }'
 ```
 
-Response (201): `{ id, matchStatus, matchConfidence, matchSignals, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId, classification, classificationConfidence, requiresReview }`
+Response (201): `{ id, matchStatus, matchConfidence, matchSignals, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId, classification, classificationConfidence, requiresReview, taskId }`
 
 ### Environment
 
@@ -349,7 +356,8 @@ This is a prototype focused on architecture, not production readiness:
 - **Form and API removal methods are still stubbed** — no real HTTP calls or Playwright automation yet
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
-- **Classification does not auto-advance request status** — labels are stored for operator review, not acted on automatically
+- **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
+- **No document upload** — tasks that require identity verification instruct the user to reply to the broker directly; file upload infrastructure is not yet built
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
 - **No Redis/BullMQ** — background jobs run synchronously via API calls
@@ -372,6 +380,7 @@ This is a prototype focused on architecture, not production readiness:
 - [x] Inbound email ingestion webhook + matching (Phase 2, chunk 1)
 - [x] Multi-signal broker reply matching with confidence scoring (Phase 2, chunk 2)
 - [x] Rule-based reply classification engine (Phase 2, chunk 3)
+- [x] User action task generation from broker replies (Phase 2, chunk 4)
 - [ ] Email inbox parsing for broker confirmations
 - [ ] Expand broker registry to 100+
 
