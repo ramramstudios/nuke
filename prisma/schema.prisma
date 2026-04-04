@@ -63,6 +63,7 @@ model Broker {
 
   requests        RemovalRequest[]
   exposures       Exposure[]
+  inboundMessages InboundMessage[]
 }
 
 // ─── Unified Deletion Requests (DROP-style) ─────────────────
@@ -79,7 +80,8 @@ model DeletionRequest {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  removalRequests RemovalRequest[]
+  removalRequests  RemovalRequest[]
+  inboundMessages  InboundMessage[]
 }
 
 // ─── Per-Broker Removal Requests ────────────────────────────
@@ -104,12 +106,15 @@ model RemovalRequest {
   completedAt       DateTime?
   deadline          DateTime? // submittedAt + broker.slaInDays
   providerMessageId String?
+  outboundMessageId String?
   lastError         String?
   attemptCount      Int      @default(0)
   lastAttemptAt     DateTime?
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  inboundMessages   InboundMessage[]
 }
 
 // ─── Scans & Exposure Detection ─────────────────────────────
@@ -139,6 +144,41 @@ model Exposure {
   confidence  Float    @default(0.5) // 0-1
 
   createdAt   DateTime @default(now())
+}
+
+// ─── Inbound Broker Messages ────────────────────────────────
+
+model InboundMessage {
+  id                     String   @id @default(cuid())
+
+  // Provider metadata
+  provider               String   // resend | gmail | sendgrid | generic
+  providerMessageId      String?
+  providerThreadId       String?
+
+  // Envelope
+  fromAddress            String
+  toAddress              String
+  subject                String?
+  textBody               String?
+  htmlBody               String?
+  headers                String?  // JSON blob of selected headers
+
+  receivedAt             DateTime @default(now())
+
+  // Matching results
+  matchedRemovalRequestId  String?
+  matchedRemovalRequest    RemovalRequest? @relation(fields: [matchedRemovalRequestId], references: [id])
+  matchedDeletionRequestId String?
+  matchedDeletionRequest   DeletionRequest? @relation(fields: [matchedDeletionRequestId], references: [id])
+  matchedBrokerId          String?
+  matchedBroker            Broker? @relation(fields: [matchedBrokerId], references: [id])
+  matchStatus              String  @default("unmatched") // matched | unmatched | ambiguous
+
+  // Full original payload for audit
+  rawPayload             String   // JSON blob of the original provider payload
+
+  createdAt              DateTime @default(now())
 }
 
 // ─── Custom / Ad-hoc Removal Requests ───────────────────────

@@ -71,6 +71,7 @@ export async function processRemoval(requestId: string): Promise<void> {
             submittedAt: now,
             sentAt: now,
             deadline,
+            outboundMessageId: emailResult.outboundMessageId ?? null,
             providerMessageId: emailResult.providerMessageId,
             lastError: null,
             lastAttemptAt: now,
@@ -160,7 +161,7 @@ async function sendDeletionEmail(input: {
   payloadSnapshot: string;
   requestId: string;
   to: string | null;
-}): Promise<{ providerMessageId: string }> {
+}): Promise<{ outboundMessageId?: string; providerMessageId: string }> {
   if (!input.to) throw new Error("No email address configured");
 
   const profile = decodeRemovalProfileSnapshot(input.payloadSnapshot);
@@ -177,7 +178,10 @@ async function sendDeletionEmail(input: {
 
   try {
     const result = await deliverBrokerEmail(outboundMessage);
-    return { providerMessageId: result.providerMessageId };
+    return {
+      outboundMessageId: result.outboundMessageId,
+      providerMessageId: result.providerMessageId,
+    };
   } catch (error) {
     logBrokerEmailFailure(outboundMessage, toSafeErrorMessage(error));
     throw error;

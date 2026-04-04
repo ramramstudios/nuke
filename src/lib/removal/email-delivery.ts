@@ -16,6 +16,7 @@ export interface OutboundBrokerEmail {
 export interface EmailDeliveryResult {
   mode: EmailDeliveryMode;
   providerMessageId: string;
+  outboundMessageId?: string;
 }
 
 export async function deliverBrokerEmail(
@@ -117,6 +118,7 @@ async function sendViaGmailSmtp(
   }
 
   const client = await createSmtpClient("smtp.gmail.com", 465);
+  const outboundMessageId = generateOutboundMessageId();
 
   try {
     await client.expect([220], "SMTP greeting");
@@ -143,6 +145,7 @@ async function sendViaGmailSmtp(
     const dataResponse = await client.sendData(
       buildSmtpMessage({
         from,
+        messageId: outboundMessageId,
         replyTo: message.replyTo,
         subject: message.subject,
         text: message.text,
@@ -161,7 +164,7 @@ async function sendViaGmailSmtp(
 
     await client.sendCommand("QUIT", [221], "QUIT");
 
-    return { mode: "gmail-smtp", providerMessageId };
+    return { mode: "gmail-smtp", providerMessageId, outboundMessageId };
   } finally {
     client.close();
   }
@@ -311,6 +314,7 @@ function validateSmtpResponse(
 
 function buildSmtpMessage(message: {
   from: string;
+  messageId: string;
   replyTo?: string;
   subject: string;
   text: string;
@@ -321,7 +325,7 @@ function buildSmtpMessage(message: {
     `To: ${sanitizeHeaderValue(message.to)}`,
     `Subject: ${encodeMimeHeader(message.subject)}`,
     `Date: ${new Date().toUTCString()}`,
-    `Message-ID: <${randomUUID()}@nuke.local>`,
+    `Message-ID: <${sanitizeHeaderValue(message.messageId)}>`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
     "Content-Transfer-Encoding: base64",
@@ -380,6 +384,10 @@ function extractSmtpProviderMessageId(response: SmtpResponse): string {
   }
 
   return lastLine.replace(/^\d{3}\s*/, "").trim();
+}
+
+function generateOutboundMessageId(): string {
+  return `${randomUUID()}@nuke.local`;
 }
 
 function toError(error: unknown): Error {

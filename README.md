@@ -156,6 +156,7 @@ src/
 │       ├── requests/                  # Unified deletion dispatch + status
 │       ├── brokers/                   # Broker registry list
 │       ├── custom-request/            # Ad-hoc URL removal
+│       ├── inbound/email/              # Inbound broker email webhook
 │       ├── cron/                      # Maintenance jobs endpoint
 │       └── simulate/                  # MVP: advance broker responses
 ├── lib/
@@ -166,6 +167,7 @@ src/
 │   ├── dispatcher/    # DROP-style centralized deletion dispatch
 │   ├── removal/       # Removal engine (API → form → email → fallback)
 │   ├── compliance/    # SLA tracking, overdue detection, status summaries
+│   ├── communications/  # Inbound message ingestion & matching
 │   ├── jobs/          # Background job scheduler
 │   └── db.ts          # Prisma client singleton
 ├── components/
@@ -235,6 +237,7 @@ Every `RemovalRequest` tracks:
 | POST | `/api/custom-request` | Add ad-hoc removal URL |
 | GET | `/api/custom-request` | List custom requests |
 | POST | `/api/simulate` | MVP: advance broker responses |
+| POST | `/api/inbound/email` | Receive inbound broker email (webhook) |
 | POST | `/api/cron` | Run maintenance cycle |
 
 ---
@@ -246,6 +249,62 @@ Every `RemovalRequest` tracks:
 - **Separation**: Raw user data vs. derived/crawled data stored separately
 - **No PII logging**: Sensitive fields never logged
 - **Secrets**: All keys via environment variables
+
+---
+
+## Inbound Email Ingestion (Phase 2)
+
+Broker replies are received via `POST /api/inbound/email`, a webhook-style endpoint protected by `INBOUND_WEBHOOK_SECRET` (bearer token, fail-closed).
+
+### How it works
+
+1. An email provider, forwarding service, or small relay posts inbound email events to the webhook.
+2. The endpoint normalizes the provider payload into a common shape, then runs best-effort matching:
+   - **In-Reply-To / References header** → matches the outbound `outboundMessageId` or `providerMessageId` stored on `RemovalRequest`
+   - **Sender domain** → matches against active `Broker.domain` or `Broker.removalEndpoint`
+3. The normalized message + match result are persisted as an `InboundMessage` record.
+4. Unmatched and ambiguous messages are stored for later manual review.
+
+### Calling the webhook
+
+Wrapped relay payload:
+
+```bash
+curl -X POST http://localhost:3000/api/inbound/email \
+  -H "Authorization: Bearer $INBOUND_WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "resend",
+    "payload": {
+      "from": "privacy@spokeo.com",
+      "to": "privacy@yourdomain.com",
+      "subject": "Re: Privacy deletion request",
+      "text": "Your request has been received.",
+      "headers": { "In-Reply-To": "<original-message-id>" }
+    }
+  }'
+```
+
+Direct provider-style JSON with a provider hint:
+
+```bash
+curl -X POST "http://localhost:3000/api/inbound/email?provider=resend" \
+  -H "Authorization: Bearer $INBOUND_WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "privacy@spokeo.com",
+    "to": "privacy@yourdomain.com",
+    "subject": "Re: Privacy deletion request",
+    "text": "Your request has been received.",
+    "headers": { "In-Reply-To": "<original-message-id>" }
+  }'
+```
+
+Response (201): `{ id, matchStatus, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId }`
+
+### Environment
+
+Set `INBOUND_WEBHOOK_SECRET` in `.env`. The endpoint rejects all requests if this is unset.
 
 ---
 
@@ -275,6 +334,7 @@ This is a prototype focused on architecture, not production readiness:
 ### Mid-term
 - [ ] Real search engine + scraping pipeline
 - [ ] Browser extension for live exposure detection
+- [x] Inbound email ingestion webhook + matching (Phase 2, chunk 1)
 - [ ] Email inbox parsing for broker confirmations
 - [ ] Expand broker registry to 100+
 
