@@ -6,6 +6,8 @@ import type { NormalizedInboundMessage, MatchResult } from "./types";
 export interface IngestResult {
   id: string;
   matchStatus: string;
+  matchConfidence: number | null;
+  matchSignals: string[];
   matchedRemovalRequestId: string | null;
   matchedDeletionRequestId: string | null;
   matchedBrokerId: string | null;
@@ -39,6 +41,8 @@ export async function ingestInboundEmail(
       removalRequestId: null,
       deletionRequestId: null,
       brokerId: null,
+      confidence: null,
+      signals: [],
     };
   }
 
@@ -49,6 +53,8 @@ export async function ingestInboundEmail(
   return {
     id: record.id,
     matchStatus: match.status,
+    matchConfidence: match.confidence,
+    matchSignals: match.signals.filter((s) => s.hit).map((s) => s.detail),
     matchedRemovalRequestId: match.removalRequestId,
     matchedDeletionRequestId: match.deletionRequestId,
     matchedBrokerId: match.brokerId,
@@ -73,6 +79,8 @@ async function persistInboundMessage(
       receivedAt: msg.receivedAt,
       rawPayload: JSON.stringify(msg.rawPayload),
       matchStatus: match.status,
+      matchConfidence: match.confidence,
+      matchSignals: match.signals.length > 0 ? JSON.stringify(match.signals) : null,
       matchedRemovalRequestId: match.removalRequestId,
       matchedDeletionRequestId: match.deletionRequestId,
       matchedBrokerId: match.brokerId,

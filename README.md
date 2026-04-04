@@ -4,6 +4,25 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 
 ---
 
+## What This App Currently Does
+
+- Creates user accounts and stores onboarding data as encrypted profile snapshots.
+- Runs a simulated broker exposure scan so the dashboard has discovery results to work with.
+- Creates one deletion request plus per-broker removal requests when a user submits removal.
+- Sends real outbound email requests for the current vetted email brokers when live email mode is enabled.
+- Stores outbound delivery evidence like provider message ids, timestamps, errors, and retry counters.
+- Accepts inbound broker replies through `/api/inbound/email` and stores match confidence plus signal traces.
+- Falls back to manual-link workflows for brokers that are not yet automated or when automation fails.
+
+What is still limited today:
+
+- Scan/discovery is still simulated.
+- Form and API broker automation are still stubs.
+- Reply ingestion and matching exist, but reply classification and automatic status advancement are still upcoming.
+- Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -259,11 +278,15 @@ Broker replies are received via `POST /api/inbound/email`, a webhook-style endpo
 ### How it works
 
 1. An email provider, forwarding service, or small relay posts inbound email events to the webhook.
-2. The endpoint normalizes the provider payload into a common shape, then runs best-effort matching:
-   - **In-Reply-To / References header** → matches the outbound `outboundMessageId` or `providerMessageId` stored on `RemovalRequest`
-   - **Sender domain** → matches against active `Broker.domain` or `Broker.removalEndpoint`
-3. The normalized message + match result are persisted as an `InboundMessage` record.
-4. Unmatched and ambiguous messages are stored for later manual review.
+2. The endpoint normalizes the provider payload into a common shape, then runs multi-signal matching:
+   - **Thread references** (In-Reply-To / References / provider thread id) → highest-confidence match against `outboundMessageId` or `providerMessageId` on `RemovalRequest`
+   - **Sender address** → exact match against broker `removalEndpoint`
+   - **Sender domain** → matches against `Broker.domain`, `Broker.removalEndpoint`, or known alias domains
+   - **Request context** → active status and recency within a 90-day window boost match confidence
+   - **Subject heuristics** → broker name in subject provides a minor signal
+3. Candidates are scored and ranked. If the top two candidates are too close in score with different requests, the match is marked `ambiguous` instead of guessing.
+4. The normalized message, match result, confidence score, and signal audit trail are persisted as an `InboundMessage` record.
+5. Unmatched and ambiguous messages are stored for later manual review.
 
 ### Calling the webhook
 
@@ -300,7 +323,7 @@ curl -X POST "http://localhost:3000/api/inbound/email?provider=resend" \
   }'
 ```
 
-Response (201): `{ id, matchStatus, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId }`
+Response (201): `{ id, matchStatus, matchConfidence, matchSignals, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId }`
 
 ### Environment
 
@@ -335,6 +358,7 @@ This is a prototype focused on architecture, not production readiness:
 - [ ] Real search engine + scraping pipeline
 - [ ] Browser extension for live exposure detection
 - [x] Inbound email ingestion webhook + matching (Phase 2, chunk 1)
+- [x] Multi-signal broker reply matching with confidence scoring (Phase 2, chunk 2)
 - [ ] Email inbox parsing for broker confirmations
 - [ ] Expand broker registry to 100+
 

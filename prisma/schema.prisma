@@ -173,7 +173,9 @@ model InboundMessage {
   matchedDeletionRequest   DeletionRequest? @relation(fields: [matchedDeletionRequestId], references: [id])
   matchedBrokerId          String?
   matchedBroker            Broker? @relation(fields: [matchedBrokerId], references: [id])
-  matchStatus              String  @default("unmatched") // matched | unmatched | ambiguous
+  matchStatus              String  @default("unmatched") // matched | broker_only | unmatched | ambiguous
+  matchConfidence          Int?    // 0-100 score; null when unmatched
+  matchSignals             String? // JSON array of signal objects for audit
 
   // Full original payload for audit
   rawPayload             String   // JSON blob of the original provider payload

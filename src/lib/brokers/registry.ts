@@ -9,6 +9,8 @@
 export interface BrokerSeed {
   name: string;
   domain: string;
+  /** Additional domains this broker may send replies from. */
+  aliasDomains?: string[];
   category:
     | "people_search"
     | "marketing"
@@ -21,6 +23,24 @@ export interface BrokerSeed {
   slaInDays: number;
   tier: 1 | 2;
   notes?: string;
+}
+
+/**
+ * Build a map from alias domain → broker name for all seeds with aliasDomains.
+ * Used by the inbound matcher to recognize replies from alternate broker domains.
+ */
+export function buildBrokerAliasDomainMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const seed of BROKER_SEEDS) {
+    if (seed.aliasDomains) {
+      for (const alias of seed.aliasDomains) {
+        map.set(alias.toLowerCase(), seed.name);
+      }
+    }
+    // Also index the primary domain
+    map.set(seed.domain.toLowerCase(), seed.name);
+  }
+  return map;
 }
 
 export const BROKER_SEEDS: BrokerSeed[] = [
@@ -156,6 +176,7 @@ export const BROKER_SEEDS: BrokerSeed[] = [
   {
     name: "Epsilon",
     domain: "epsilon.com",
+    aliasDomains: ["epsilondata.com", "publicisgroupe.com"],
     category: "data_broker",
     searchMethod: "api",
     removalMethod: "email",
@@ -232,6 +253,7 @@ export const BROKER_SEEDS: BrokerSeed[] = [
   {
     name: "FullContact",
     domain: "fullcontact.com",
+    aliasDomains: ["fullcontact.io"],
     category: "analytics",
     searchMethod: "api",
     removalMethod: "email",

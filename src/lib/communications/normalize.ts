@@ -24,8 +24,8 @@ function normalizeResend(raw: Record<string, unknown>): NormalizedInboundMessage
     provider: "resend",
     providerMessageId: str(data.email_id) ?? str(data.message_id),
     providerThreadId: str(data.thread_id),
-    fromAddress: str(data.from) ?? "",
-    toAddress: str(data.to) ?? firstOf(data.to) ?? "",
+    fromAddress: extractEmailAddress(data.from),
+    toAddress: extractEmailAddress(data.to) || extractEmailAddress(firstOf(data.to)),
     subject: str(data.subject),
     textBody: str(data.text),
     htmlBody: str(data.html),
@@ -40,8 +40,8 @@ function normalizeSendGrid(raw: Record<string, unknown>): NormalizedInboundMessa
     provider: "sendgrid",
     providerMessageId: extractHeaderValue(raw, "Message-ID"),
     providerThreadId: extractHeaderValue(raw, "In-Reply-To"),
-    fromAddress: str(raw.from) ?? "",
-    toAddress: str(raw.to) ?? "",
+    fromAddress: extractEmailAddress(raw.from),
+    toAddress: extractEmailAddress(raw.to),
     subject: str(raw.subject),
     textBody: str(raw.text),
     htmlBody: str(raw.html),
@@ -59,8 +59,8 @@ function normalizeGeneric(
     provider,
     providerMessageId: str(raw.providerMessageId) ?? str(raw.messageId) ?? str(raw.message_id),
     providerThreadId: str(raw.providerThreadId) ?? str(raw.threadId) ?? str(raw.thread_id),
-    fromAddress: str(raw.from) ?? str(raw.fromAddress) ?? str(raw.sender) ?? "",
-    toAddress: str(raw.to) ?? str(raw.toAddress) ?? str(raw.recipient) ?? "",
+    fromAddress: extractEmailAddress(raw.from) || extractEmailAddress(raw.fromAddress) || extractEmailAddress(raw.sender),
+    toAddress: extractEmailAddress(raw.to) || extractEmailAddress(raw.toAddress) || extractEmailAddress(raw.recipient),
     subject: str(raw.subject),
     textBody: str(raw.text) ?? str(raw.textBody) ?? str(raw.body),
     htmlBody: str(raw.html) ?? str(raw.htmlBody),
@@ -71,6 +71,27 @@ function normalizeGeneric(
 }
 
 // ─── helpers ────────────────────────────────────────────────
+
+/**
+ * Extract the bare email address from an RFC 5322 mailbox string.
+ * Handles formats like:
+ *   "Epsilon Privacy <privacy@epsilon.com>" → "privacy@epsilon.com"
+ *   "<privacy@epsilon.com>"                 → "privacy@epsilon.com"
+ *   "privacy@epsilon.com"                   → "privacy@epsilon.com"
+ */
+function extractEmailAddress(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+
+  // Match angle-bracketed address: Display Name <addr> or <addr>
+  const angleBracket = raw.match(/<([^>]+)>/);
+  if (angleBracket) {
+    return angleBracket[1].trim().toLowerCase();
+  }
+
+  // No brackets — treat the whole string as the address
+  return raw.trim().toLowerCase();
+}
 
 function str(value: unknown): string | null {
   if (typeof value === "string" && value.length > 0) return value;
