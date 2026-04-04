@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"register" | "profile">("register");
+  const [step, setStep] = useState<"register" | "login" | "profile">("register");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,6 +21,37 @@ export default function OnboardingPage() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateAuthState() {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok || cancelled) {
+        return;
+      }
+
+      const me = (await res.json()) as { email: string; hasProfile: boolean };
+      if (cancelled) {
+        return;
+      }
+
+      if (me.hasProfile) {
+        router.replace("/dashboard");
+        return;
+      }
+
+      setProfileEmail(me.email);
+      setEmail(me.email);
+      setStep("profile");
+    }
+
+    void hydrateAuthState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -43,6 +74,38 @@ export default function OnboardingPage() {
     setProfileEmail(email);
     setStep("profile");
     setLoading(false);
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || "Login failed");
+      setLoading(false);
+      return;
+    }
+
+    const meRes = await fetch("/api/auth/me");
+    if (meRes.ok) {
+      const me = (await meRes.json()) as { email: string; hasProfile: boolean };
+      if (!me.hasProfile) {
+        setProfileEmail(me.email);
+        setStep("profile");
+        setLoading(false);
+        return;
+      }
+    }
+
+    router.push("/dashboard");
   }
 
   async function handleProfile(e: React.FormEvent) {
@@ -77,13 +140,50 @@ export default function OnboardingPage() {
   return (
     <main className="flex-1 flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
+        <div className="flex rounded-lg border border-gray-800 bg-gray-950 p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setStep("register");
+            }}
+            className={`flex-1 rounded-md px-3 py-2 transition-colors ${
+              step === "register"
+                ? "bg-red-600 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Create Account
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setStep("login");
+            }}
+            className={`flex-1 rounded-md px-3 py-2 transition-colors ${
+              step === "login"
+                ? "bg-red-600 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Log In
+          </button>
+        </div>
+
         <h1 className="text-3xl font-bold text-center">
-          {step === "register" ? "Create Account" : "Your Information"}
+          {step === "profile"
+            ? "Your Information"
+            : step === "login"
+              ? "Welcome Back"
+              : "Create Account"}
         </h1>
         <p className="text-gray-400 text-center text-sm">
-          {step === "register"
-            ? "Sign up to start removing your data"
-            : "We need this to find and remove your data. All fields are encrypted."}
+          {step === "profile"
+            ? "We need this to find and remove your data. All fields are encrypted."
+            : step === "login"
+              ? "Sign in to continue tracking and submitting removals"
+              : "Sign up to start removing your data"}
         </p>
 
         {error && (
@@ -117,6 +217,32 @@ export default function OnboardingPage() {
               className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
             >
               {loading ? "Creating account…" : "Continue"}
+            </button>
+          </form>
+        ) : step === "login" ? (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+            >
+              {loading ? "Signing in…" : "Go to Dashboard"}
             </button>
           </form>
         ) : (
