@@ -31,6 +31,15 @@ async function main() {
     });
   }
 
+  await prisma.broker.updateMany({
+    where: { name: "PeopleFinder" },
+    data: {
+      active: false,
+      notes:
+        "Legacy broker entry replaced by PeopleFinders web opt-out flow on peoplefinders.com/opt-out.",
+    },
+  });
+
   console.log(`Seeded ${BROKER_SEEDS.length} brokers.`);
 }
 

@@ -174,6 +174,8 @@ ensure_app_defaults() {
   ensure_default_line "EMAIL_DELIVERY_MODE" "dry-run"
   ensure_default_line "EMAIL_FROM" "privacy@example.com"
   ensure_default_line "RESEND_API_KEY" ""
+  ensure_default_line "GMAIL_SMTP_USER" ""
+  ensure_default_line "GMAIL_SMTP_APP_PASSWORD" ""
 }
 
 sync_env_from_shell_if_present() {
@@ -242,29 +244,102 @@ configure_email_mode() {
   ensure_secret_line "EMAIL_DELIVERY_MODE" "$mode"
 }
 
-validate_live_email_env() {
+configure_email_dry_run_env() {
+  configure_email_mode "dry-run"
+}
+
+detect_preferred_live_email_mode() {
+  if [[ -n "${EMAIL_DELIVERY_MODE:-}" ]]; then
+    case "$EMAIL_DELIVERY_MODE" in
+      resend|gmail-smtp)
+        printf '%s\n' "$EMAIL_DELIVERY_MODE"
+        return 0
+        ;;
+    esac
+  fi
+
+  if [[ -n "${GMAIL_SMTP_USER:-}" || -n "${GMAIL_SMTP_APP_PASSWORD:-}" ]]; then
+    printf 'gmail-smtp\n'
+    return 0
+  fi
+
+  if [[ -n "${RESEND_API_KEY:-}" ]]; then
+    printf 'resend\n'
+    return 0
+  fi
+
+  if [[ -f .env ]]; then
+    local configured_mode
+    configured_mode="$(read_env_value EMAIL_DELIVERY_MODE)"
+    case "$configured_mode" in
+      resend|gmail-smtp)
+        printf '%s\n' "$configured_mode"
+        return 0
+        ;;
+    esac
+  fi
+
+  printf 'resend\n'
+}
+
+validate_resend_live_email_env() {
   local email_from resend_key
   email_from="$(read_env_value EMAIL_FROM)"
   resend_key="$(read_env_value RESEND_API_KEY)"
 
   if ! is_verified_sender_value "$email_from"; then
-    die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live or ./script.sh email-smoke-test you@example.com \"PeopleFinder\""
+    die "EMAIL_FROM must be a verified Resend sender address. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
   fi
 
   if [[ -z "$resend_key" ]]; then
-    die "RESEND_API_KEY must be set for live email delivery. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live or ./script.sh email-smoke-test you@example.com \"PeopleFinder\""
+    die "RESEND_API_KEY must be set for live email delivery. Example: EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live"
   fi
 }
 
-configure_email_dry_run_env() {
-  configure_email_mode "dry-run"
+validate_gmail_smtp_env() {
+  local gmail_user gmail_app_password email_from
+  gmail_user="$(read_env_value GMAIL_SMTP_USER)"
+  gmail_app_password="$(read_env_value GMAIL_SMTP_APP_PASSWORD)"
+  email_from="$(read_env_value EMAIL_FROM)"
+
+  if [[ -z "$gmail_user" || "$gmail_user" != *"@"* ]]; then
+    die "GMAIL_SMTP_USER must be a Gmail address. Example: GMAIL_SMTP_USER=you@gmail.com GMAIL_SMTP_APP_PASSWORD=xxxx ./script.sh email-live"
+  fi
+
+  if [[ -z "$gmail_app_password" ]]; then
+    die "GMAIL_SMTP_APP_PASSWORD must be set. Generate a Google App Password after enabling 2-Step Verification, then run: GMAIL_SMTP_USER=you@gmail.com GMAIL_SMTP_APP_PASSWORD=xxxx ./script.sh email-live"
+  fi
+
+  if [[ -z "$email_from" || "$email_from" != "$gmail_user" ]]; then
+    ensure_secret_line "EMAIL_FROM" "$gmail_user"
+    email_from="$gmail_user"
+    log "Set EMAIL_FROM to match GMAIL_SMTP_USER for Gmail SMTP delivery"
+  fi
 }
 
-configure_email_live_env() {
+configure_resend_live_env() {
   sync_env_from_shell_if_present "EMAIL_FROM"
   sync_env_from_shell_if_present "RESEND_API_KEY"
   configure_email_mode "resend"
-  validate_live_email_env
+  validate_resend_live_email_env
+}
+
+configure_gmail_smtp_env() {
+  sync_env_from_shell_if_present "GMAIL_SMTP_USER"
+  sync_env_from_shell_if_present "GMAIL_SMTP_APP_PASSWORD"
+  configure_email_mode "gmail-smtp"
+  validate_gmail_smtp_env
+}
+
+configure_email_live_env() {
+  local live_mode
+  live_mode="$(detect_preferred_live_email_mode)"
+
+  case "$live_mode" in
+    gmail-smtp) configure_gmail_smtp_env ;;
+    resend) configure_resend_live_env ;;
+    *) die "Unsupported live email mode: $live_mode" ;;
+  esac
 }
 
 show_email_pilot_summary() {
@@ -274,8 +349,10 @@ show_email_pilot_summary() {
 
   if [[ "$mode" == "resend" ]]; then
     log "Live email pilot ready. ${brokers} broker entries use direct email delivery. Start the app, complete onboarding, then click Submit Removal to trigger real outbound email."
+  elif [[ "$mode" == "gmail-smtp" ]]; then
+    log "Live Gmail SMTP pilot ready. ${brokers} broker entries use direct email delivery. Start the app, complete onboarding, then click Submit Removal to trigger outbound email from your Gmail account."
   else
-    log "Dry-run email pilot ready. ${brokers} broker entries use direct email delivery, but sends will stay simulated until you switch EMAIL_DELIVERY_MODE to resend."
+    log "Dry-run email pilot ready. ${brokers} broker entries use direct email delivery, but sends will stay simulated until you switch EMAIL_DELIVERY_MODE to resend or gmail-smtp."
   fi
 }
 
@@ -353,7 +430,7 @@ bootstrap_email_live() {
   configure_email_live_env
   db_push
   db_seed
-  show_email_pilot_summary "resend"
+  show_email_pilot_summary "$(read_env_value EMAIL_DELIVERY_MODE)"
   dev_server
 }
 
@@ -364,7 +441,7 @@ list_email_brokers() {
 
 email_smoke_test() {
   local user_email="${1:-${SMOKE_TEST_USER_EMAIL:-}}"
-  local broker_name="${2:-${SMOKE_TEST_BROKER_NAME:-PeopleFinder}}"
+  local broker_name="${2:-${SMOKE_TEST_BROKER_NAME:-Epsilon}}"
 
   if [[ -z "$user_email" ]]; then
     die "Provide the smoke test user email as './script.sh email-smoke-test user@example.com [Broker Name]' or set SMOKE_TEST_USER_EMAIL."
@@ -381,12 +458,16 @@ doctor() {
   local email_mode="missing"
   local email_from_status="missing"
   local resend_status="missing"
+  local gmail_user_status="missing"
+  local gmail_app_password_status="missing"
 
   if [[ -f .env ]]; then
-    local email_from resend_key
+    local email_from resend_key gmail_user gmail_app_password
     email_mode="$(read_env_value EMAIL_DELIVERY_MODE)"
     email_from="$(read_env_value EMAIL_FROM)"
     resend_key="$(read_env_value RESEND_API_KEY)"
+    gmail_user="$(read_env_value GMAIL_SMTP_USER)"
+    gmail_app_password="$(read_env_value GMAIL_SMTP_APP_PASSWORD)"
 
     if is_verified_sender_value "$email_from"; then
       email_from_status="set"
@@ -399,6 +480,18 @@ doctor() {
     else
       resend_status="missing"
     fi
+
+    if [[ -n "$gmail_user" ]]; then
+      gmail_user_status="set"
+    else
+      gmail_user_status="missing"
+    fi
+
+    if [[ -n "$gmail_app_password" ]]; then
+      gmail_app_password_status="set"
+    else
+      gmail_app_password_status="missing"
+    fi
   fi
 
   printf 'Project: %s\n' "$ROOT_DIR"
@@ -409,6 +502,8 @@ doctor() {
   printf 'Email:   %s\n' "${email_mode:-missing}"
   printf 'From:    %s\n' "$email_from_status"
   printf 'Resend:  %s\n' "$resend_status"
+  printf 'Gmail:   %s\n' "$gmail_user_status"
+  printf 'GmailPw: %s\n' "$gmail_app_password_status"
 }
 
 print_help() {
@@ -430,7 +525,7 @@ Commands:
   prod            Build and start the production server
   start           Start the production server
   email-dry-run   Prepare env for the email pilot in dry-run mode, then run dev
-  email-live      Prepare env for the live Resend email pilot, then run dev
+  email-live      Prepare env for the live email pilot (Resend or Gmail SMTP), then run dev
   email-brokers   List the email-method brokers available for smoke testing
   email-smoke-test  Send one live broker email for an onboarded user profile
   full-dev        Alias for bootstrap-dev
@@ -447,10 +542,14 @@ Notes:
     Example:
       export NODE_BIN_DIR="/usr/local/opt/node@22/bin"
       ./script.sh bootstrap-dev
-  - For a real email pilot, pass your verified sender and Resend key:
+  - For a real email pilot with Resend, pass your verified sender and key:
       EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-live
+  - For a real email pilot with Gmail SMTP, pass your Gmail and App Password:
+      GMAIL_SMTP_USER="you@gmail.com" GMAIL_SMTP_APP_PASSWORD="xxxx xxxx xxxx xxxx" ./script.sh email-live
   - For a one-broker live smoke test after onboarding:
-      EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-smoke-test you@example.com "PeopleFinder"
+      EMAIL_FROM="privacy@yourdomain.com" RESEND_API_KEY="re_..." ./script.sh email-smoke-test you@example.com "Epsilon"
+  - Gmail SMTP smoke test:
+      GMAIL_SMTP_USER="you@gmail.com" GMAIL_SMTP_APP_PASSWORD="xxxx xxxx xxxx xxxx" ./script.sh email-smoke-test you@example.com "Epsilon"
 EOF
 }
 
@@ -470,7 +569,7 @@ NUKE startup menu
   11. Bootstrap full dev flow
   12. Bootstrap full prod flow
   13. Email pilot (dry-run)
-  14. Email pilot (live Resend send)
+  14. Email pilot (live Resend or Gmail SMTP send)
   15. List smoke-test email brokers
   16. Run live email smoke test
   0. Exit
@@ -499,9 +598,9 @@ EOF
       local user_email broker_name
       printf '\nSmoke test user email: '
       read -r user_email
-      printf 'Broker name [%s]: ' "PeopleFinder"
+      printf 'Broker name [%s]: ' "Epsilon"
       read -r broker_name
-      email_smoke_test "$user_email" "${broker_name:-PeopleFinder}"
+      email_smoke_test "$user_email" "${broker_name:-Epsilon}"
       ;;
     0) exit 0 ;;
     *) die "Unknown option: $choice" ;;

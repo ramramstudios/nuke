@@ -75,8 +75,9 @@ function printHelp() {
   npm run smoke:email -- --list-brokers
 
 Notes:
-  - Requires EMAIL_DELIVERY_MODE=resend
-  - Requires a verified EMAIL_FROM and RESEND_API_KEY
+  - Requires EMAIL_DELIVERY_MODE=resend or EMAIL_DELIVERY_MODE=gmail-smtp
+  - Resend requires EMAIL_FROM and RESEND_API_KEY
+  - Gmail SMTP requires GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD
   - Uses an existing onboarded user profile and sends one live broker email
   - Default broker: ${DEFAULT_SMOKE_TEST_BROKER}`);
 }

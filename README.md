@@ -65,15 +65,15 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Spin Up Commands
 
-For the email automation pilot, the quickest path is:
+For the email automation pilot, the quickest real-send path without buying a domain is Gmail SMTP:
 
 ```bash
 # 1. Make sure Node 22 is active in this shell
 export NODE_BIN_DIR="${NODE_BIN_DIR:-/usr/local/opt/node@22/bin}"
 export PATH="$NODE_BIN_DIR:$PATH"
 
-# 2. Launch the live email pilot
-EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
+# 2. Launch the live email pilot with Gmail SMTP
+GMAIL_SMTP_USER=you@gmail.com GMAIL_SMTP_APP_PASSWORD="xxxx xxxx xxxx xxxx" ./script.sh email-live
 ```
 
 If you install Node with `nvm` or the official Node installer instead of Homebrew, run `unset NODE_BIN_DIR` first so the script uses your active `node` from `PATH`.
@@ -94,32 +94,50 @@ If you want a safe rehearsal first, use:
 6. Requests with `requires_user_action` status show direct removal links
 7. Hit `POST /api/simulate` to advance the simulation (brokers acknowledge/complete)
 
-Email-method brokers can now be piloted with real outbound delivery by setting:
+Email-method brokers can now be piloted with real outbound delivery by setting either Resend or Gmail SMTP:
 
 ```bash
+# Resend
 EMAIL_DELIVERY_MODE=resend
 EMAIL_FROM=privacy@yourdomain.com
 RESEND_API_KEY=re_...
+
+# Gmail SMTP
+EMAIL_DELIVERY_MODE=gmail-smtp
+GMAIL_SMTP_USER=you@gmail.com
+GMAIL_SMTP_APP_PASSWORD=xxxx xxxx xxxx xxxx
+# The script will set EMAIL_FROM to match GMAIL_SMTP_USER
 ```
 
 By default, the app stays in `dry-run` mode and records a synthetic provider message id without sending.
 
-If you want a one-command live pilot once Node 22 is available, use:
+If you want a one-command live pilot once Node 22 is available, use either:
 
 ```bash
+# Resend
 EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-live
+
+# Gmail SMTP
+GMAIL_SMTP_USER=you@gmail.com GMAIL_SMTP_APP_PASSWORD="xxxx xxxx xxxx xxxx" ./script.sh email-live
 ```
 
-That command will install dependencies, prepare `.env`, switch delivery to `resend`, push the Prisma schema, seed brokers, and start the dev server.
+That command will install dependencies, prepare `.env`, switch delivery to `resend` or `gmail-smtp`, push the Prisma schema, seed brokers, and start the dev server.
 
 To run the Phase 1 live smoke test against one real email broker after you complete onboarding, use:
 
 ```bash
 ./script.sh email-brokers
-EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-smoke-test you@example.com "PeopleFinder"
+
+# Resend
+EMAIL_FROM=privacy@yourdomain.com RESEND_API_KEY=re_... ./script.sh email-smoke-test you@example.com "Epsilon"
+
+# Gmail SMTP
+GMAIL_SMTP_USER=you@gmail.com GMAIL_SMTP_APP_PASSWORD="xxxx xxxx xxxx xxxx" ./script.sh email-smoke-test you@example.com "Epsilon"
 ```
 
 The smoke test sends one live broker email, then prints the stored `providerMessageId`, request ids, status, and timestamps from the database so you can confirm real provider acceptance.
+
+For Gmail SMTP, use a Google App Password after enabling 2-Step Verification. The app sends from `GMAIL_SMTP_USER`, and `EMAIL_FROM` is automatically aligned to that Gmail address for the SMTP transaction.
 
 ---
 
@@ -237,7 +255,7 @@ This is a prototype focused on architecture, not production readiness:
 
 - **Scan results are simulated** — random probability based on broker category
 - **Form and API removal methods are still stubbed** — no real HTTP calls or Playwright automation yet
-- **Email brokers support a phase 1 pilot** via Resend; broker acknowledgements/completions are still simulated
+- **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
 - **No Redis/BullMQ** — background jobs run synchronously via API calls

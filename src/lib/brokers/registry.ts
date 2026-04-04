@@ -56,14 +56,16 @@ export const BROKER_SEEDS: BrokerSeed[] = [
     tier: 1,
   },
   {
-    name: "PeopleFinder",
-    domain: "peoplefinder.com",
+    name: "PeopleFinders",
+    domain: "peoplefinders.com",
     category: "people_search",
     searchMethod: "url_pattern",
-    removalMethod: "email",
-    removalEndpoint: "privacy@peoplefinder.com",
+    removalMethod: "form",
+    removalEndpoint: "https://www.peoplefinders.com/opt-out",
     slaInDays: 45,
     tier: 1,
+    notes:
+      "Consumer suppression starts at the PeopleFinders opt-out form and requires email verification; not a direct privacy mailbox.",
   },
   {
     name: "TruePeopleSearch",

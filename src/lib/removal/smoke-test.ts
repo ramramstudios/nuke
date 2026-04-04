@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db";
+import { getEmailDeliveryMode } from "@/lib/removal/email-delivery";
 import { processRemoval } from "@/lib/removal/engine";
 import { createRemovalProfileSnapshot } from "@/lib/removal/profile";
 
-export const DEFAULT_SMOKE_TEST_BROKER = "PeopleFinder";
+export const DEFAULT_SMOKE_TEST_BROKER = "Epsilon";
 
 export interface EmailSmokeTestInput {
   userEmail: string;
@@ -124,7 +125,7 @@ export async function runEmailSmokeTest(
 
   if (processed.providerMessageId.startsWith("dryrun_")) {
     throw new Error(
-      "Smoke test ran in dry-run mode. Set EMAIL_DELIVERY_MODE=resend before retrying."
+      "Smoke test ran in dry-run mode. Set EMAIL_DELIVERY_MODE to resend or gmail-smtp before retrying."
     );
   }
 
@@ -145,11 +146,7 @@ export async function runEmailSmokeTest(
 }
 
 function ensureLiveEmailMode() {
-  if (process.env.EMAIL_DELIVERY_MODE !== "resend") {
-    throw new Error(
-      "EMAIL_DELIVERY_MODE must be set to resend for the live smoke test"
-    );
-  }
+  const mode = getEmailDeliveryMode();
 
   if (!process.env.EMAIL_FROM || !process.env.EMAIL_FROM.includes("@")) {
     throw new Error(
@@ -157,11 +154,28 @@ function ensureLiveEmailMode() {
     );
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error(
-      "RESEND_API_KEY must be set for the live smoke test"
-    );
+  if (mode === "resend") {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY must be set for the live smoke test");
+    }
+    return;
   }
+
+  if (mode === "gmail-smtp") {
+    if (!process.env.GMAIL_SMTP_USER || !process.env.GMAIL_SMTP_USER.includes("@")) {
+      throw new Error("GMAIL_SMTP_USER must be set for the Gmail SMTP smoke test");
+    }
+    if (!process.env.GMAIL_SMTP_APP_PASSWORD) {
+      throw new Error(
+        "GMAIL_SMTP_APP_PASSWORD must be set for the Gmail SMTP smoke test"
+      );
+    }
+    return;
+  }
+
+  throw new Error(
+    "EMAIL_DELIVERY_MODE must be set to resend or gmail-smtp for the live smoke test"
+  );
 }
 
 async function findEmailBrokerByName(name: string) {
