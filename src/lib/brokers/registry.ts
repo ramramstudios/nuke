@@ -106,6 +106,8 @@ export const BROKER_SEEDS: BrokerSeed[] = [
     removalEndpoint: "privacy@ussearch.com",
     slaInDays: 45,
     tier: 1,
+    notes:
+      "Pending verification. Official PeopleConnect suppression terms suggest USSearch is handled through a verified suppression flow rather than a vetted consumer privacy mailbox.",
   },
   {
     name: "Radaris",
@@ -144,10 +146,12 @@ export const BROKER_SEEDS: BrokerSeed[] = [
     domain: "oracle.com",
     category: "data_broker",
     searchMethod: "api",
-    removalMethod: "email",
-    removalEndpoint: "privacy-inquiries_ww@oracle.com",
+    removalMethod: "manual_link",
+    removalEndpoint: "https://www.oracle.com/legal/privacy/privacy-choices/",
     slaInDays: 45,
     tier: 1,
+    notes:
+      "Oracle's current privacy page directs users to the Privacy Choices inquiry flow instead of the bounced privacy-inquiries_ww@oracle.com mailbox.",
   },
   {
     name: "Epsilon",
@@ -192,6 +196,8 @@ export const BROKER_SEEDS: BrokerSeed[] = [
     removalEndpoint: "privacy@datalogix.com",
     slaInDays: 45,
     tier: 2,
+    notes:
+      "Datalogix is retired and was acquired by Oracle; the datalogix.com domain no longer resolves for consumer requests.",
   },
   {
     name: "LiveRamp",

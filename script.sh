@@ -230,6 +230,11 @@ setup_env() {
 }
 
 count_email_brokers() {
+  if [[ -f prisma/dev.db ]] && command -v sqlite3 >/dev/null 2>&1; then
+    sqlite3 prisma/dev.db 'select count(*) from Broker where active = 1 and removalMethod = "email";' || true
+    return 0
+  fi
+
   if [[ -f src/lib/brokers/registry.ts ]]; then
     grep -c 'removalMethod: "email"' src/lib/brokers/registry.ts || true
     return 0
