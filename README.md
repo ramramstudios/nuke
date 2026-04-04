@@ -11,14 +11,16 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Creates one deletion request plus per-broker removal requests when a user submits removal.
 - Sends real outbound email requests for the current vetted email brokers when live email mode is enabled.
 - Stores outbound delivery evidence like provider message ids, timestamps, errors, and retry counters.
-- Accepts inbound broker replies through `/api/inbound/email` and stores match confidence plus signal traces.
+- Accepts inbound broker replies through `/api/inbound/email`, matches them back to broker workflows, and stores match confidence plus signal traces.
+- Classifies inbound replies into acknowledgment, completion, rejection, needs-more-info, or noise with a review flag for uncertain cases.
 - Falls back to manual-link workflows for brokers that are not yet automated or when automation fails.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
 - Form and API broker automation are still stubs.
-- Reply ingestion and matching exist, but reply classification and automatic status advancement are still upcoming.
+- Reply classification is rule-based and will need tuning as real broker traffic accumulates.
+- Automatic status advancement, user task generation, and operator review tooling are still upcoming.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 
 ---
@@ -286,7 +288,15 @@ Broker replies are received via `POST /api/inbound/email`, a webhook-style endpo
    - **Subject heuristics** → broker name in subject provides a minor signal
 3. Candidates are scored and ranked. If the top two candidates are too close in score with different requests, the match is marked `ambiguous` instead of guessing.
 4. The normalized message, match result, confidence score, and signal audit trail are persisted as an `InboundMessage` record.
-5. Unmatched and ambiguous messages are stored for later manual review.
+5. A rule-based reply classifier evaluates the subject and body to assign a classification label:
+   - **acknowledgment** — broker confirms receipt or says the request is being processed
+   - **completion** — broker confirms data was removed, suppressed, or opt-out processed
+   - **rejection** — broker denies the request, reports no records found, or declares ineligibility
+   - **needs_more_info** — broker asks for identity verification, additional documents, or a confirmation click
+   - **noise** — auto-replies, out-of-office, delivery failures, newsletter chatter
+   - Messages that don't match any pattern confidently are left unclassified (`null`).
+6. Classification confidence, signal audit trail, and a `requiresReview` flag are persisted alongside the match data. Messages are flagged for review when confidence is low, the match is not fully resolved, or no label could be assigned.
+7. Unmatched and ambiguous messages are stored for later manual review.
 
 ### Calling the webhook
 
@@ -323,7 +333,7 @@ curl -X POST "http://localhost:3000/api/inbound/email?provider=resend" \
   }'
 ```
 
-Response (201): `{ id, matchStatus, matchConfidence, matchSignals, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId }`
+Response (201): `{ id, matchStatus, matchConfidence, matchSignals, matchedRemovalRequestId, matchedDeletionRequestId, matchedBrokerId, classification, classificationConfidence, requiresReview }`
 
 ### Environment
 
@@ -338,6 +348,8 @@ This is a prototype focused on architecture, not production readiness:
 - **Scan results are simulated** — random probability based on broker category
 - **Form and API removal methods are still stubbed** — no real HTTP calls or Playwright automation yet
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
+- **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
+- **Classification does not auto-advance request status** — labels are stored for operator review, not acted on automatically
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
 - **No Redis/BullMQ** — background jobs run synchronously via API calls
@@ -359,6 +371,7 @@ This is a prototype focused on architecture, not production readiness:
 - [ ] Browser extension for live exposure detection
 - [x] Inbound email ingestion webhook + matching (Phase 2, chunk 1)
 - [x] Multi-signal broker reply matching with confidence scoring (Phase 2, chunk 2)
+- [x] Rule-based reply classification engine (Phase 2, chunk 3)
 - [ ] Email inbox parsing for broker confirmations
 - [ ] Expand broker registry to 100+
 

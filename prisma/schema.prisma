@@ -177,6 +177,12 @@ model InboundMessage {
   matchConfidence          Int?    // 0-100 score; null when unmatched
   matchSignals             String? // JSON array of signal objects for audit
 
+  // Reply classification
+  classification           String?  // acknowledgment | completion | rejection | needs_more_info | noise | null
+  classificationConfidence Int?     // 0-100 score
+  classificationSignals    String?  // JSON array of ClassificationSignal objects
+  requiresReview           Boolean  @default(true)
+
   // Full original payload for audit
   rawPayload             String   // JSON blob of the original provider payload
 

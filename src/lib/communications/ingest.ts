@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/db";
 import { normalizeInboundPayload } from "./normalize";
 import { matchInboundMessage } from "./match";
-import type { NormalizedInboundMessage, MatchResult } from "./types";
+import { classifyReply } from "./classify";
+import type {
+  NormalizedInboundMessage,
+  MatchResult,
+  ClassificationResult,
+} from "./types";
 
 export interface IngestResult {
   id: string;
@@ -11,6 +16,9 @@ export interface IngestResult {
   matchedRemovalRequestId: string | null;
   matchedDeletionRequestId: string | null;
   matchedBrokerId: string | null;
+  classification: string | null;
+  classificationConfidence: number | null;
+  requiresReview: boolean;
 }
 
 export class InboundValidationError extends Error {
@@ -46,9 +54,10 @@ export async function ingestInboundEmail(
     };
   }
 
-  const record = await persistInboundMessage(normalized, match);
+  const classification = classifyReply(normalized, match);
+  const record = await persistInboundMessage(normalized, match, classification);
 
-  logIngestEvent(record.id, normalized.provider, match.status);
+  logIngestEvent(record.id, normalized.provider, match.status, classification.label);
 
   return {
     id: record.id,
@@ -58,12 +67,16 @@ export async function ingestInboundEmail(
     matchedRemovalRequestId: match.removalRequestId,
     matchedDeletionRequestId: match.deletionRequestId,
     matchedBrokerId: match.brokerId,
+    classification: classification.label,
+    classificationConfidence: classification.confidence,
+    requiresReview: classification.requiresReview,
   };
 }
 
 async function persistInboundMessage(
   msg: NormalizedInboundMessage,
-  match: MatchResult
+  match: MatchResult,
+  classification: ClassificationResult
 ) {
   return prisma.inboundMessage.create({
     data: {
@@ -84,12 +97,24 @@ async function persistInboundMessage(
       matchedRemovalRequestId: match.removalRequestId,
       matchedDeletionRequestId: match.deletionRequestId,
       matchedBrokerId: match.brokerId,
+      classification: classification.label,
+      classificationConfidence: classification.confidence,
+      classificationSignals:
+        classification.signals.length > 0
+          ? JSON.stringify(classification.signals)
+          : null,
+      requiresReview: classification.requiresReview,
     },
   });
 }
 
-function logIngestEvent(id: string, provider: string, matchStatus: string) {
-  console.info("[nuke][inbound]", { id, provider, matchStatus });
+function logIngestEvent(
+  id: string,
+  provider: string,
+  matchStatus: string,
+  classification: string | null
+) {
+  console.info("[nuke][inbound]", { id, provider, matchStatus, classification });
 }
 
 function validateNormalizedInboundMessage(msg: NormalizedInboundMessage) {

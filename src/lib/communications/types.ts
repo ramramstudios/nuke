@@ -53,3 +53,31 @@ export interface MatchResult {
   /** Signals that contributed to the match decision. */
   signals: MatchSignal[];
 }
+
+// ─── Reply Classification ─────────────────────────────────────
+
+export type ClassificationLabel =
+  | "acknowledgment"
+  | "completion"
+  | "rejection"
+  | "needs_more_info"
+  | "noise";
+
+/** A signal that contributed to (or against) a classification. */
+export interface ClassificationSignal {
+  rule: string;
+  label: ClassificationLabel;
+  weight: number;
+  detail: string;
+}
+
+export interface ClassificationResult {
+  /** null when confidence is too low to assign a label. */
+  label: ClassificationLabel | null;
+  /** 0-100 confidence score. */
+  confidence: number;
+  /** Ordered list of signals that contributed to the decision. */
+  signals: ClassificationSignal[];
+  /** True when an operator should review before acting on this classification. */
+  requiresReview: boolean;
+}
