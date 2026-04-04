@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -133,8 +134,12 @@ export default function DashboardPage() {
 
   async function handleScan() {
     setActionLoading("scan");
-    await fetch("/api/scan", { method: "POST" });
+    const res = await fetch("/api/scan", { method: "POST" });
     setActionLoading("");
+    if (res.ok) {
+      router.push("/dashboard/scans");
+      return;
+    }
     await refreshDashboard();
   }
 
@@ -187,6 +192,12 @@ export default function DashboardPage() {
           <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
         </div>
         <div className="flex gap-3">
+          <Link
+            href="/dashboard/scans"
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
+          >
+            View Scan Results
+          </Link>
           <button
             onClick={handleScan}
             disabled={!!actionLoading}
