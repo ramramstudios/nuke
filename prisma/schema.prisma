@@ -114,11 +114,35 @@ model RemovalRequest {
   attemptCount      Int      @default(0)
   lastAttemptAt     DateTime?
 
+  // Retry policy tracking (Phase 2, chunk 5)
+  retryStage        Int      @default(0) // 0=initial send, 1=first follow-up, 2=second follow-up, 3+=escalated
+  nextRetryAt       DateTime?
+  lastRetryReason   String?
+  escalatedAt       DateTime?
+  escalationReason  String?
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   inboundMessages   InboundMessage[]
+  retryAttempts     RemovalRetryAttempt[]
   tasks             UserTask[]
+}
+
+model RemovalRetryAttempt {
+  id                String   @id @default(cuid())
+  removalRequestId  String
+  removalRequest    RemovalRequest @relation(fields: [removalRequestId], references: [id], onDelete: Cascade)
+
+  stage             Int
+  action            String   // follow_up | escalate
+  outcome           String   // sent | failed | escalated
+  reason            String
+  providerMessageId String?
+  outboundMessageId String?
+  error             String?
+  attemptedAt       DateTime @default(now())
+  nextRetryAt       DateTime?
 }
 
 // ─── Scans & Exposure Detection ─────────────────────────────

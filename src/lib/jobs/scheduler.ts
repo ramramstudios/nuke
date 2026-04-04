@@ -15,6 +15,7 @@ import { prisma } from "@/lib/db";
 import { runScan } from "@/lib/crawler/scanner";
 import { processAllPending } from "@/lib/removal/engine";
 import { flagOverdueRequests, simulateBrokerResponses } from "@/lib/compliance/tracker";
+import { processRetries } from "@/lib/removal/retry";
 
 /**
  * Re-scan all users who haven't been scanned in SCAN_INTERVAL_DAYS.
@@ -65,14 +66,23 @@ export async function processAllPendingRemovals(): Promise<{ processed: number }
  */
 export async function runMaintenanceCycle() {
   const overdue = await flagOverdueRequests();
-  const simulated = await simulateBrokerResponses();
   const scans = await runRecurringScans();
   const removals = await processAllPendingRemovals();
+  const retries = await processRetries();
+
+  // MVP simulator only runs when explicitly enabled.
+  // It randomly advances submitted requests, which would bypass the
+  // no-response retry policy in non-demo environments.
+  const enableSimulation = process.env.ENABLE_BROKER_SIMULATION === "true";
+  const simulated = enableSimulation
+    ? await simulateBrokerResponses()
+    : { acknowledged: 0, completed: 0 };
 
   return {
     overdueChecked: overdue,
     simulated,
     scans,
     removals,
+    retries,
   };
 }

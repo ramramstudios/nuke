@@ -18,6 +18,7 @@ import {
   logBrokerEmailFailure,
 } from "@/lib/removal/email-delivery";
 import { decodeRemovalProfileSnapshot } from "@/lib/removal/profile";
+import { RETRY_SCHEDULE } from "@/lib/removal/retry";
 
 /**
  * Process a single removal request.
@@ -64,6 +65,11 @@ export async function processRemoval(requestId: string): Promise<void> {
           requestId: req.id,
           to: req.broker.removalEndpoint,
         });
+        // Compute when the first retry follow-up becomes eligible
+        const firstRetry = RETRY_SCHEDULE.find((s) => s.stage === 1);
+        const nextRetryAt = firstRetry
+          ? new Date(now.getTime() + firstRetry.delayDays * 24 * 60 * 60 * 1000)
+          : null;
         await prisma.removalRequest.update({
           where: { id: req.id },
           data: {
@@ -76,6 +82,7 @@ export async function processRemoval(requestId: string): Promise<void> {
             lastError: null,
             lastAttemptAt: now,
             attemptCount: { increment: 1 },
+            nextRetryAt,
           },
         });
         break;

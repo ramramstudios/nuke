@@ -10,17 +10,18 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Runs a simulated broker exposure scan so the dashboard has discovery results to work with.
 - Creates one deletion request plus per-broker removal requests when a user submits removal.
 - Sends real outbound email requests for the current vetted email brokers when live email mode is enabled.
-- Stores outbound delivery evidence like provider message ids, timestamps, errors, and retry counters.
+- Stores outbound delivery evidence like provider message ids, timestamps, errors, retry counters, and per-attempt retry audit records.
 - Accepts inbound broker replies through `/api/inbound/email`, matches them back to broker workflows, and stores match confidence plus signal traces.
 - Classifies inbound replies into acknowledgment, completion, rejection, needs-more-info, or noise with a review flag for uncertain cases.
 - Falls back to manual-link workflows for brokers that are not yet automated or when automation fails.
+- Automatically retries email brokers that never respond, following a defined retry schedule (7d → 14d → escalate), and escalates unresponsive requests for manual review.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
 - Form and API broker automation are still stubs.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
-- Automatic status advancement, user task generation, and operator review tooling are still upcoming.
+- Operator review tooling is still upcoming.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 
 ---
@@ -348,6 +349,64 @@ Set `INBOUND_WEBHOOK_SECRET` in `.env`. The endpoint rejects all requests if thi
 
 ---
 
+## No-Response Retry Policy (Phase 2)
+
+Email-method broker requests that receive no meaningful response are automatically retried on a defined schedule, triggered by the maintenance cron cycle (`POST /api/cron`).
+
+### Retry schedule
+
+| Stage | Delay | Action |
+|-------|-------|--------|
+| 0 (initial send) | — | Original deletion email sent by removal engine |
+| 1 | 7 days after initial send | First follow-up email |
+| 2 | 14 days after stage 1 | Second follow-up email |
+| 3 | 14 days after stage 2 | Escalated — marked `requires_user_action` for manual review |
+
+### What counts as "no response"
+
+A request is eligible for retry only when ALL of these are true:
+- Method is `email` and status is `submitted`
+- Retry stage has not reached the maximum
+- Enough time has passed since the last attempt (per schedule above)
+- No matched inbound message classified as acknowledgment, completion, rejection, or needs_more_info exists
+- No pending user task (from chunk 4) blocks the request
+- Noise-classified replies (auto-replies, out-of-office) do NOT suppress retries
+
+### What suppresses retries
+
+- Any meaningful broker response (acknowledgment, completion, rejection, needs_more_info)
+- A pending or pending_review user task linked to the removal request
+- Request status other than `submitted` (acknowledged, completed, rejected, requires_user_action)
+
+### Cron integration
+
+The retry evaluator runs as part of `runMaintenanceCycle()`. The cron response includes a `retries` object:
+
+```json
+{
+  "retries": {
+    "eligible": 3,
+    "retried": 2,
+    "escalated": 1,
+    "skipped": 0,
+    "errors": 0
+  }
+}
+```
+
+Each follow-up send, failed retry, and escalation is also persisted as a `RemovalRetryAttempt` audit record with stage, outcome, reason, timestamps, and any provider/error metadata available at the time.
+
+Broker simulation is disabled by default for cron-driven maintenance. Set `ENABLE_BROKER_SIMULATION=true` only for MVP demos where you intentionally want fake acknowledgments/completions mixed into the workflow.
+
+### Current limitations
+
+- Follow-up emails use a minimal deterministic template; richer follow-up copy is planned for chunk 6
+- No operator UI for reviewing escalated requests yet (chunk 8)
+- Retry schedule is code-defined, not configurable per-broker
+- No Redis/BullMQ — retries run synchronously within the cron cycle
+
+---
+
 ## MVP Limitations
 
 This is a prototype focused on architecture, not production readiness:
@@ -357,6 +416,7 @@ This is a prototype focused on architecture, not production readiness:
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
 - **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
+- **Retry follow-ups use a minimal template** — richer follow-up copy and per-broker customization are planned for chunk 6
 - **No document upload** — tasks that require identity verification instruct the user to reply to the broker directly; file upload infrastructure is not yet built
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
@@ -381,6 +441,7 @@ This is a prototype focused on architecture, not production readiness:
 - [x] Multi-signal broker reply matching with confidence scoring (Phase 2, chunk 2)
 - [x] Rule-based reply classification engine (Phase 2, chunk 3)
 - [x] User action task generation from broker replies (Phase 2, chunk 4)
+- [x] No-response retry policy for email brokers (Phase 2, chunk 5)
 - [ ] Email inbox parsing for broker confirmations
 - [ ] Expand broker registry to 100+
 
