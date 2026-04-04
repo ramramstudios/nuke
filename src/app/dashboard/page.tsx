@@ -63,6 +63,7 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
+  const [showResubmitConfirm, setShowResubmitConfirm] = useState(false);
 
   // Custom request form
   const [customUrl, setCustomUrl] = useState("");
@@ -143,11 +144,25 @@ export default function DashboardPage() {
     await refreshDashboard();
   }
 
-  async function handleSubmitRemoval() {
+  async function submitRemovalNow() {
     setActionLoading("remove");
     await fetch("/api/requests", { method: "POST" });
     setActionLoading("");
     await refreshDashboard();
+  }
+
+  async function handleSubmitRemoval() {
+    if (latestSubmittedAt) {
+      setShowResubmitConfirm(true);
+      return;
+    }
+
+    await submitRemovalNow();
+  }
+
+  async function handleConfirmResubmit() {
+    setShowResubmitConfirm(false);
+    await submitRemovalNow();
   }
 
   async function handleCustomRequest(e: React.FormEvent) {
@@ -183,8 +198,64 @@ export default function DashboardPage() {
     );
   }
 
+  const latestSubmittedAt = requests
+    .map((req) => req.submittedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+
   return (
     <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
+      {showResubmitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+          <div className="w-full max-w-lg rounded-2xl border border-orange-900/60 bg-gray-950 p-6 shadow-2xl">
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-400">
+                  Resubmit Warning
+                </p>
+                <h2 className="mt-2 text-2xl font-bold text-white">
+                  A removal request was already sent
+                </h2>
+              </div>
+
+              <p className="text-sm leading-6 text-gray-300">
+                We already have a pending removal workflow that was submitted at{" "}
+                <span className="font-medium text-white">
+                  {formatDateTime(latestSubmittedAt)}
+                </span>
+                . Sending another batch right now is not advised because it can
+                spam brokers and make the results less effective.
+              </p>
+
+              <p className="text-sm leading-6 text-gray-400">
+                In the future we plan to block repeat submissions entirely for
+                active requests. If you still want to force another round, you
+                can continue below.
+              </p>
+
+              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowResubmitConfirm(false)}
+                  disabled={!!actionLoading}
+                  className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmResubmit}
+                  disabled={!!actionLoading}
+                  className="px-4 py-2 rounded-lg bg-orange-600 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {actionLoading === "remove" ? "Resubmitting…" : "Resubmit Anyway"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -409,4 +480,8 @@ function Card({
       <div className="text-xs text-gray-400 mt-1">{label}</div>
     </div>
   );
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString();
 }
