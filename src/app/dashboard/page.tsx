@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SLACountdown } from "@/components/SLACountdown";
+import {
+  getResponseErrorMessage,
+  parseJsonResponse,
+} from "@/lib/http/client-response";
 
 interface Summary {
   total: number;
@@ -69,17 +73,32 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [showResubmitConfirm, setShowResubmitConfirm] = useState(false);
+  const [error, setError] = useState("");
 
   // Custom request form
   const [customUrl, setCustomUrl] = useState("");
 
   async function fetchDashboardData(): Promise<DashboardData | null> {
     const meRes = await fetch("/api/auth/me");
-    if (!meRes.ok) {
-      return null;
-    }
-    const me = await meRes.json() as { email: string; hasProfile: boolean };
+    const mePayload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(meRes);
 
+    if (!meRes.ok) {
+      if (meRes.status === 401) {
+        return null;
+      }
+
+      throw new Error(
+        getResponseErrorMessage(mePayload, "Could not load your session.")
+      );
+    }
+
+    if (!mePayload.data) {
+      throw new Error(
+        getResponseErrorMessage(mePayload, "Could not read your session.")
+      );
+    }
+
+    const me = mePayload.data;
     if (!me.hasProfile) {
       return null;
     }
@@ -91,12 +110,53 @@ export default function DashboardPage() {
       fetch("/api/tasks"),
     ]);
 
+    const [summaryPayload, detailPayload, customPayload, tasksPayload] =
+      await Promise.all([
+        parseJsonResponse<Summary>(summaryRes),
+        parseJsonResponse<RemovalRequest[]>(detailRes),
+        parseJsonResponse<CustomReq[]>(customRes),
+        parseJsonResponse<UserTask[]>(tasksRes),
+      ]);
+
+    if (!summaryRes.ok || !summaryPayload.data) {
+      throw new Error(
+        getResponseErrorMessage(
+          summaryPayload,
+          "Could not load dashboard summary."
+        )
+      );
+    }
+
+    if (!detailRes.ok || !detailPayload.data) {
+      throw new Error(
+        getResponseErrorMessage(
+          detailPayload,
+          "Could not load broker request details."
+        )
+      );
+    }
+
+    if (!customRes.ok || !customPayload.data) {
+      throw new Error(
+        getResponseErrorMessage(
+          customPayload,
+          "Could not load custom request history."
+        )
+      );
+    }
+
+    if (!tasksRes.ok || !tasksPayload.data) {
+      throw new Error(
+        getResponseErrorMessage(tasksPayload, "Could not load your action items.")
+      );
+    }
+
     return {
       user: me,
-      summary: summaryRes.ok ? await summaryRes.json() : null,
-      requests: detailRes.ok ? await detailRes.json() : [],
-      customRequests: customRes.ok ? await customRes.json() : [],
-      tasks: tasksRes.ok ? await tasksRes.json() : [],
+      summary: summaryPayload.data,
+      requests: detailPayload.data,
+      customRequests: customPayload.data,
+      tasks: tasksPayload.data,
     };
   }
 
@@ -113,13 +173,24 @@ export default function DashboardPage() {
     let cancelled = false;
 
     async function loadDashboard() {
-      const data = await fetchDashboardData();
-      if (cancelled) return;
-      if (!data) {
-        router.push("/onboarding");
-        return;
+      try {
+        const data = await fetchDashboardData();
+        if (cancelled) return;
+        if (!data) {
+          router.push("/onboarding");
+          return;
+        }
+        setError("");
+        applyDashboardData(data);
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load your dashboard."
+        );
+        setLoading(false);
       }
-      applyDashboardData(data);
     }
 
     void loadDashboard();
@@ -130,12 +201,21 @@ export default function DashboardPage() {
   }, [router]);
 
   async function refreshDashboard() {
-    const data = await fetchDashboardData();
-    if (!data) {
-      router.push("/onboarding");
-      return;
+    try {
+      const data = await fetchDashboardData();
+      if (!data) {
+        router.push("/onboarding");
+        return;
+      }
+      setError("");
+      applyDashboardData(data);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Could not refresh your dashboard."
+      );
     }
-    applyDashboardData(data);
   }
 
   async function handleScan() {
@@ -294,6 +374,12 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-800 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
 
       {/* Summary Cards */}
       {summary && summary.total > 0 && (

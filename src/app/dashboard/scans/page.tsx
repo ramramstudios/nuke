@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  getResponseErrorMessage,
+  parseJsonResponse,
+} from "@/lib/http/client-response";
 
 interface ExposureRecord {
   id: string;
@@ -43,20 +47,41 @@ export default function ScanResultsPage() {
 
   async function fetchScanData(): Promise<ScanPageData | null> {
     const meRes = await fetch("/api/auth/me", { cache: "no-store" });
+    const mePayload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(meRes);
+
     if (!meRes.ok) {
-      return null;
+      if (meRes.status === 401) {
+        return null;
+      }
+
+      throw new Error(
+        getResponseErrorMessage(mePayload, "Could not load your session.")
+      );
     }
 
-    const me = (await meRes.json()) as { email: string; hasProfile: boolean };
+    if (!mePayload.data) {
+      throw new Error(
+        getResponseErrorMessage(mePayload, "Could not read your session.")
+      );
+    }
+
+    const me = mePayload.data;
     if (!me.hasProfile) {
       return null;
     }
 
     const scansRes = await fetch("/api/scan", { cache: "no-store" });
+    const scansPayload = await parseJsonResponse<ScanRecord[]>(scansRes);
+
+    if (!scansRes.ok || !scansPayload.data) {
+      throw new Error(
+        getResponseErrorMessage(scansPayload, "Could not load scan results.")
+      );
+    }
 
     return {
       user: me,
-      scans: scansRes.ok ? ((await scansRes.json()) as ScanRecord[]) : [],
+      scans: scansPayload.data,
     };
   }
 
@@ -70,15 +95,26 @@ export default function ScanResultsPage() {
     let cancelled = false;
 
     async function loadScans() {
-      const data = await fetchScanData();
-      if (cancelled) return;
+      try {
+        const data = await fetchScanData();
+        if (cancelled) return;
 
-      if (!data) {
-        router.push("/onboarding");
-        return;
+        if (!data) {
+          router.push("/onboarding");
+          return;
+        }
+
+        setError("");
+        applyScanData(data);
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load scan results."
+        );
+        setLoading(false);
       }
-
-      applyScanData(data);
     }
 
     void loadScans();
@@ -89,12 +125,21 @@ export default function ScanResultsPage() {
   }, [router]);
 
   async function refreshScans() {
-    const data = await fetchScanData();
-    if (!data) {
-      router.push("/onboarding");
-      return;
+    try {
+      const data = await fetchScanData();
+      if (!data) {
+        router.push("/onboarding");
+        return;
+      }
+      setError("");
+      applyScanData(data);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Could not refresh scan results."
+      );
     }
-    applyScanData(data);
   }
 
   async function handleRunScan() {
@@ -103,8 +148,8 @@ export default function ScanResultsPage() {
 
     const res = await fetch("/api/scan", { method: "POST" });
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error || "Scan failed");
+      const payload = await parseJsonResponse<{ error?: string }>(res);
+      setError(getResponseErrorMessage(payload, "Scan failed"));
       setActionLoading("");
       return;
     }

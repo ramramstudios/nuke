@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  getResponseErrorMessage,
+  parseJsonResponse,
+} from "@/lib/http/client-response";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -27,11 +31,32 @@ export default function OnboardingPage() {
 
     async function hydrateAuthState() {
       const res = await fetch("/api/auth/me");
-      if (!res.ok || cancelled) {
+      const payload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(res);
+
+      if (cancelled) {
         return;
       }
 
-      const me = (await res.json()) as { email: string; hasProfile: boolean };
+      if (!res.ok) {
+        if (res.status !== 401) {
+          setError(
+            getResponseErrorMessage(
+              payload,
+              "Could not check your current session."
+            )
+          );
+        }
+        return;
+      }
+
+      if (!payload.data) {
+        setError(
+          getResponseErrorMessage(payload, "Could not read your current session.")
+        );
+        return;
+      }
+
+      const me = payload.data;
       if (cancelled) {
         return;
       }
@@ -63,10 +88,10 @@ export default function OnboardingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
+    const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Registration failed");
+      setError(getResponseErrorMessage(payload, "Registration failed"));
       setLoading(false);
       return;
     }
@@ -86,23 +111,33 @@ export default function OnboardingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
+    const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Login failed");
+      setError(getResponseErrorMessage(payload, "Login failed"));
       setLoading(false);
       return;
     }
 
     const meRes = await fetch("/api/auth/me");
-    if (meRes.ok) {
-      const me = (await meRes.json()) as { email: string; hasProfile: boolean };
-      if (!me.hasProfile) {
-        setProfileEmail(me.email);
-        setStep("profile");
-        setLoading(false);
-        return;
-      }
+    const mePayload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(meRes);
+    if (!meRes.ok || !mePayload.data) {
+      setError(
+        getResponseErrorMessage(
+          mePayload,
+          "Login succeeded, but your session could not be loaded."
+        )
+      );
+      setLoading(false);
+      return;
+    }
+
+    const me = mePayload.data;
+    if (!me.hasProfile) {
+      setProfileEmail(me.email);
+      setStep("profile");
+      setLoading(false);
+      return;
     }
 
     router.push("/dashboard");
@@ -124,12 +159,14 @@ export default function OnboardingPage() {
           street && city && state && zip
             ? [{ street, city, state, zip }]
             : [],
-      }),
+        }),
     });
+    const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      const data = await res.json();
-      setError(typeof data.error === "string" ? data.error : "Failed to save profile");
+      setError(
+        getResponseErrorMessage(payload, "Failed to save profile")
+      );
       setLoading(false);
       return;
     }
