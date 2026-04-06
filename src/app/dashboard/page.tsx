@@ -209,7 +209,8 @@ export default function DashboardPage() {
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
   const emailedCount = requests.filter((req) => Boolean(req.sentAt)).length;
   const deliveryIssueCount = requests.filter((req) => Boolean(req.lastError)).length;
-  const manualFallbackCount = requests.filter((req) => isManualFallback(req)).length;
+  const manualFallbackRequests = requests.filter((req) => isManualFallback(req));
+  const manualFallbackCount = manualFallbackRequests.length;
 
   return (
     <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
@@ -315,6 +316,99 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {manualFallbackRequests.length > 0 && (
+        <section>
+          <div className="rounded-2xl border border-orange-900/60 bg-orange-950/30 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-400">
+                  Manual Follow-Up Needed
+                </p>
+                <h2 className="mt-2 text-2xl font-bold text-white">
+                  Some brokers could not be contacted automatically
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-orange-100/80">
+                  We already tried the email route for these brokers and it failed.
+                  We have switched each one to a direct broker opt-out link so you can
+                  finish the request yourself without leaving the dashboard guessing what
+                  happened next.
+                </p>
+              </div>
+              <div className="rounded-xl border border-orange-900/60 bg-black/20 px-4 py-3 text-sm text-orange-100">
+                {manualFallbackRequests.length} broker
+                {manualFallbackRequests.length === 1 ? "" : "s"} need manual follow-up
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {manualFallbackRequests.map((req) => {
+                const nextSteps = getManualFallbackSteps(req);
+
+                return (
+                  <article
+                    key={`fallback-${req.id}`}
+                    className="rounded-xl border border-orange-900/50 bg-black/20 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-semibold text-white">
+                          {req.broker.name}
+                        </h3>
+                        <p className="mt-1 text-sm text-orange-100/80">
+                          {getManualFallbackSummary(req)}
+                        </p>
+                      </div>
+                      {req.removalUrl && (
+                        <a
+                          href={req.removalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
+                        >
+                          Open broker opt-out page
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <div className="rounded-lg border border-orange-900/40 bg-orange-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-300">
+                          What Happened
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-gray-200">
+                          {getManualFallbackWhatHappened(req)}
+                        </p>
+                        {req.lastError && (
+                          <p className="mt-3 text-xs leading-5 text-red-300">
+                            Last failure: {trimMessage(req.lastError, 220)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-orange-900/40 bg-orange-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-300">
+                          What To Do Next
+                        </p>
+                        <ol className="mt-2 space-y-2 text-sm leading-6 text-gray-200">
+                          {nextSteps.map((step, index) => (
+                            <li key={`${req.id}-step-${index}`}>
+                              <span className="mr-2 font-semibold text-orange-300">
+                                {index + 1}.
+                              </span>
+                              {step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Action Required Tasks */}
       {tasks.length > 0 && (
         <section>
@@ -395,68 +489,72 @@ export default function DashboardPage() {
                   const delivery = getDeliveryView(req);
 
                   return (
-                  <tr key={req.id} className="hover:bg-gray-900/50 align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{req.broker.name}</div>
-                      <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">
-                      {req.broker.category.replace(/_/g, " ")}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-3">
-                      <div className="min-w-[18rem]">
-                        <p className={`font-medium ${delivery.titleClassName}`}>
-                          {delivery.title}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
-                        {delivery.failure && (
-                          <p className="mt-2 text-xs text-red-300">
-                            Last failure: {delivery.failure}
+                    <tr key={req.id} className="hover:bg-gray-900/50 align-top">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{req.broker.name}</div>
+                        <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400">
+                        {req.broker.category.replace(/_/g, " ")}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
+                      <td className="px-4 py-3">
+                        <div className="min-w-[18rem]">
+                          <p className={`font-medium ${delivery.titleClassName}`}>
+                            {delivery.title}
                           </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={req.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <SLACountdown deadline={req.deadline} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-[14rem] flex-col gap-2">
-                        {(req.status === "requires_user_action" || req.method === "manual_link") &&
-                          req.removalUrl && (
-                            <a
-                              href={req.removalUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-red-400 hover:text-red-300 underline text-xs"
-                            >
-                              {isManualFallback(req) ? "Finish manually →" : "Open opt-out link →"}
-                            </a>
+                          <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
+                          {delivery.failure && (
+                            <p className="mt-2 text-xs text-red-300">
+                              Last failure: {delivery.failure}
+                            </p>
                           )}
-                        {isManualFallback(req) ? (
-                          <p className="text-xs text-orange-300">
-                            Email automation failed, so this broker was moved to a manual fallback.
-                          </p>
-                        ) : req.sentAt ? (
-                          <p className="text-xs text-gray-500">
-                            No action needed unless the broker asks for more information.
-                          </p>
-                        ) : req.method === "manual_link" ? (
-                          <p className="text-xs text-gray-500">
-                            Use the direct broker link to complete this opt-out.
-                          </p>
-                        ) : (
-                          <p className="text-xs text-gray-500">
-                            Delivery is being tracked automatically.
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )})}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={req.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <SLACountdown deadline={req.deadline} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-[14rem] flex-col gap-2">
+                          {(req.status === "requires_user_action" || req.method === "manual_link") &&
+                            req.removalUrl && (
+                              <a
+                                href={req.removalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-red-400 hover:text-red-300 underline text-xs"
+                              >
+                                {isManualFallback(req)
+                                  ? "Open broker opt-out page →"
+                                  : "Open opt-out link →"}
+                              </a>
+                            )}
+                          {isManualFallback(req) ? (
+                            <p className="text-xs text-orange-300">
+                              Next: open the broker page, complete their opt-out flow,
+                              and then check back here for any follow-up tasks.
+                            </p>
+                          ) : req.sentAt ? (
+                            <p className="text-xs text-gray-500">
+                              No action needed unless the broker asks for more information.
+                            </p>
+                          ) : req.method === "manual_link" ? (
+                            <p className="text-xs text-gray-500">
+                              Use the direct broker link to complete this opt-out.
+                            </p>
+                          ) : (
+                            <p className="text-xs text-gray-500">
+                              Delivery is being tracked automatically.
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -547,6 +645,44 @@ function formatDateTime(value: string) {
 
 function isManualFallback(req: RemovalRequest) {
   return req.method === "manual_link" && Boolean(req.lastError);
+}
+
+function getManualFallbackSummary(req: RemovalRequest) {
+  const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
+  if (attemptedAt) {
+    return `Automatic email delivery failed on ${formatDateTime(
+      attemptedAt
+    )}, so this request has been switched to a manual broker opt-out.`;
+  }
+
+  return "Automatic email delivery failed, so this request has been switched to a manual broker opt-out.";
+}
+
+function getManualFallbackWhatHappened(req: RemovalRequest) {
+  const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
+  if (attemptedAt) {
+    return `We tried to contact ${req.broker.name} automatically on ${formatDateTime(
+      attemptedAt
+    )}, but the broker email could not be delivered. Instead of leaving the request stuck, NUKE generated a direct fallback path for you.`;
+  }
+
+  return `We tried to contact ${req.broker.name} automatically, but the broker email could not be delivered. Instead of leaving the request stuck, NUKE generated a direct fallback path for you.`;
+}
+
+function getManualFallbackSteps(req: RemovalRequest) {
+  if (req.removalUrl) {
+    return [
+      "Open the broker opt-out page using the link above.",
+      "Complete the broker's own removal or suppression form using the matching profile information they already show.",
+      "Return to this dashboard later to see whether any new tasks or broker responses appear.",
+    ];
+  }
+
+  return [
+    "Refresh the dashboard to see whether the fallback link is available.",
+    "Once the broker link appears, complete the broker's own opt-out flow directly.",
+    "Check back here afterward for any new follow-up tasks.",
+  ];
 }
 
 function getDeliveryView(req: RemovalRequest): {
