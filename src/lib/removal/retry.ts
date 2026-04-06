@@ -9,6 +9,9 @@
  *   Stage 1 → 2: Second follow-up after 14 more days (21 days total)
  *   Stage 2 → 3: Escalated — marked for manual review after 14 more days (35 days total)
  *
+ * Follow-up emails now include stage-aware copy and prior-thread references
+ * so the second touch can continue the original broker conversation.
+ *
  * "Meaningful response" means a matched inbound message classified as
  * acknowledgment, completion, rejection, or needs_more_info.
  * Noise-classified replies do NOT suppress retries.
@@ -69,6 +72,9 @@ export interface RetryResult {
 
 interface EligibleRequest {
   id: string;
+  nextRetryAt: Date | null;
+  outboundMessageId: string | null;
+  providerMessageId: string | null;
   retryStage: number;
   lastAttemptAt: Date | null;
   sentAt: Date | null;
@@ -199,7 +205,11 @@ async function retryRequest(
   const followUp = buildFollowUpEmail(
     profile,
     req.broker.name,
-    config.stage
+    {
+      followUpStage: config.stage,
+      initialSentAt: req.sentAt,
+      previousFollowUpSentAt: req.retryStage >= 1 ? req.lastAttemptAt : null,
+    }
   );
 
   const to = req.broker.removalEndpoint;
@@ -209,6 +219,8 @@ async function retryRequest(
 
   const outboundMessage = {
     brokerName: req.broker.name,
+    inReplyTo: req.outboundMessageId ?? req.providerMessageId ?? undefined,
+    references: buildThreadReferences(req),
     requestId: req.id,
     to,
     subject: followUp.subject,
@@ -423,4 +435,12 @@ function recordRetryAttempt(input: RetryAttemptRecordInput) {
       error: input.error ?? null,
     },
   });
+}
+
+function buildThreadReferences(req: EligibleRequest): string[] {
+  return [...new Set([req.outboundMessageId, req.providerMessageId].filter(isPresent))];
+}
+
+function isPresent(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

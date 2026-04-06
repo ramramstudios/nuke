@@ -396,13 +396,15 @@ The retry evaluator runs as part of `runMaintenanceCycle()`. The cron response i
 
 Each follow-up send, failed retry, and escalation is also persisted as a `RemovalRetryAttempt` audit record with stage, outcome, reason, timestamps, and any provider/error metadata available at the time.
 
+Follow-up emails use stage-aware first-touch and second-touch copy. When a prior outbound message id is available, the delivery layer also attaches `Message-ID`, `In-Reply-To`, and `References` headers so retries can continue the earlier broker thread instead of starting a fresh conversation.
+
 Broker simulation is disabled by default for cron-driven maintenance. Set `ENABLE_BROKER_SIMULATION=true` only for MVP demos where you intentionally want fake acknowledgments/completions mixed into the workflow.
 
 ### Current limitations
 
-- Follow-up emails use a minimal deterministic template; richer follow-up copy is planned for chunk 6
 - No operator UI for reviewing escalated requests yet (chunk 8)
 - Retry schedule is code-defined, not configurable per-broker
+- Follow-up copy is stage-aware but still generic across brokers
 - No Redis/BullMQ — retries run synchronously within the cron cycle
 
 ---
@@ -416,7 +418,7 @@ This is a prototype focused on architecture, not production readiness:
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
 - **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
-- **Retry follow-ups use a minimal template** — richer follow-up copy and per-broker customization are planned for chunk 6
+- **Retry follow-ups are still generic across brokers** — they now preserve thread references when possible, but broker-specific copy is still future work
 - **No document upload** — tasks that require identity verification instruct the user to reply to the broker directly; file upload infrastructure is not yet built
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration

@@ -11,6 +11,8 @@ export interface OutboundBrokerEmail {
   subject: string;
   text: string;
   replyTo?: string;
+  inReplyTo?: string;
+  references?: string[];
 }
 
 export interface EmailDeliveryResult {
@@ -23,23 +25,25 @@ export async function deliverBrokerEmail(
   message: OutboundBrokerEmail
 ): Promise<EmailDeliveryResult> {
   const mode = getEmailDeliveryMode();
+  const outboundMessageId = generateOutboundMessageId();
 
   if (mode === "dry-run") {
     const providerMessageId = `dryrun_${randomUUID()}`;
     logEmailEvent("accepted", {
       brokerName: message.brokerName,
       mode,
+      outboundMessageId,
       providerMessageId,
       requestId: message.requestId,
     });
-    return { mode, providerMessageId };
+    return { mode, outboundMessageId, providerMessageId };
   }
 
   if (mode === "gmail-smtp") {
-    return sendViaGmailSmtp(message);
+    return sendViaGmailSmtp(message, outboundMessageId);
   }
 
-  return sendViaResend(message);
+  return sendViaResend(message, outboundMessageId);
 }
 
 export function getEmailDeliveryMode(): EmailDeliveryMode {
@@ -49,7 +53,8 @@ export function getEmailDeliveryMode(): EmailDeliveryMode {
 }
 
 async function sendViaResend(
-  message: OutboundBrokerEmail
+  message: OutboundBrokerEmail,
+  outboundMessageId: string
 ): Promise<EmailDeliveryResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -72,6 +77,7 @@ async function sendViaResend(
       to: [message.to],
       subject: message.subject,
       text: message.text,
+      headers: buildThreadHeaders(message, outboundMessageId),
       reply_to: message.replyTo,
     }),
   });
@@ -91,15 +97,17 @@ async function sendViaResend(
   logEmailEvent("accepted", {
     brokerName: message.brokerName,
     mode: "resend",
+    outboundMessageId,
     providerMessageId,
     requestId: message.requestId,
   });
 
-  return { mode: "resend", providerMessageId };
+  return { mode: "resend", outboundMessageId, providerMessageId };
 }
 
 async function sendViaGmailSmtp(
-  message: OutboundBrokerEmail
+  message: OutboundBrokerEmail,
+  outboundMessageId: string
 ): Promise<EmailDeliveryResult> {
   const gmailUser = process.env.GMAIL_SMTP_USER;
   const gmailAppPassword = process.env.GMAIL_SMTP_APP_PASSWORD;
@@ -118,7 +126,6 @@ async function sendViaGmailSmtp(
   }
 
   const client = await createSmtpClient("smtp.gmail.com", 465);
-  const outboundMessageId = generateOutboundMessageId();
 
   try {
     await client.expect([220], "SMTP greeting");
@@ -145,7 +152,9 @@ async function sendViaGmailSmtp(
     const dataResponse = await client.sendData(
       buildSmtpMessage({
         from,
+        inReplyTo: message.inReplyTo,
         messageId: outboundMessageId,
+        references: message.references,
         replyTo: message.replyTo,
         subject: message.subject,
         text: message.text,
@@ -158,6 +167,7 @@ async function sendViaGmailSmtp(
     logEmailEvent("accepted", {
       brokerName: message.brokerName,
       mode: "gmail-smtp",
+      outboundMessageId,
       providerMessageId,
       requestId: message.requestId,
     });
@@ -314,7 +324,9 @@ function validateSmtpResponse(
 
 function buildSmtpMessage(message: {
   from: string;
+  inReplyTo?: string;
   messageId: string;
+  references?: string[];
   replyTo?: string;
   subject: string;
   text: string;
@@ -325,7 +337,7 @@ function buildSmtpMessage(message: {
     `To: ${sanitizeHeaderValue(message.to)}`,
     `Subject: ${encodeMimeHeader(message.subject)}`,
     `Date: ${new Date().toUTCString()}`,
-    `Message-ID: <${sanitizeHeaderValue(message.messageId)}>`,
+    `Message-ID: ${formatMessageIdHeaderValue(message.messageId)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
     "Content-Transfer-Encoding: base64",
@@ -333,6 +345,18 @@ function buildSmtpMessage(message: {
 
   if (message.replyTo) {
     headers.push(`Reply-To: ${sanitizeHeaderValue(message.replyTo)}`);
+  }
+
+  if (message.inReplyTo) {
+    headers.push(`In-Reply-To: ${formatMessageIdHeaderValue(message.inReplyTo)}`);
+  }
+
+  const referenceHeader = formatReferencesHeaderValue(
+    message.references,
+    message.inReplyTo
+  );
+  if (referenceHeader) {
+    headers.push(`References: ${referenceHeader}`);
   }
 
   const body = chunkBase64(normalizeLineBreaks(message.text));
@@ -371,6 +395,65 @@ function sanitizeHeaderValue(value: string): string {
 
 function sanitizeAddress(value: string): string {
   return sanitizeHeaderValue(value).replace(/[<>]/g, "");
+}
+
+function buildThreadHeaders(
+  message: OutboundBrokerEmail,
+  outboundMessageId: string
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Message-ID": formatMessageIdHeaderValue(outboundMessageId),
+  };
+
+  if (message.inReplyTo) {
+    headers["In-Reply-To"] = formatMessageIdHeaderValue(message.inReplyTo);
+  }
+
+  const referenceHeader = formatReferencesHeaderValue(
+    message.references,
+    message.inReplyTo
+  );
+  if (referenceHeader) {
+    headers.References = referenceHeader;
+  }
+
+  return headers;
+}
+
+function formatReferencesHeaderValue(
+  references?: string[],
+  inReplyTo?: string
+): string | null {
+  const values = normalizeMessageIds([
+    ...(references ?? []),
+    ...(inReplyTo ? [inReplyTo] : []),
+  ]);
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.map((value) => formatMessageIdHeaderValue(value)).join(" ");
+}
+
+function normalizeMessageIds(values: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of values) {
+    const sanitized = sanitizeAddress(value);
+    if (!sanitized || seen.has(sanitized)) {
+      continue;
+    }
+
+    seen.add(sanitized);
+    normalized.push(sanitized);
+  }
+
+  return normalized;
+}
+
+function formatMessageIdHeaderValue(value: string): string {
+  return `<${sanitizeAddress(value)}>`;
 }
 
 function toBase64(value: string): string {
@@ -413,6 +496,7 @@ function logEmailEvent(
   details: {
     brokerName: string;
     mode: EmailDeliveryMode;
+    outboundMessageId?: string;
     providerMessageId?: string;
     requestId: string;
     error?: string;
@@ -421,6 +505,7 @@ function logEmailEvent(
   const safeDetails = {
     brokerName: details.brokerName,
     mode: details.mode,
+    outboundMessageId: details.outboundMessageId,
     providerMessageId: details.providerMessageId,
     requestId: details.requestId,
     error: details.error,
