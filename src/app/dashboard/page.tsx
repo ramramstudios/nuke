@@ -24,6 +24,11 @@ interface RemovalRequest {
   removalUrl: string | null;
   deadline: string | null;
   submittedAt: string | null;
+  sentAt: string | null;
+  lastAttemptAt: string | null;
+  lastError: string | null;
+  providerMessageId: string | null;
+  attemptCount: number;
   broker: { name: string; domain: string; category: string };
 }
 
@@ -202,6 +207,9 @@ export default function DashboardPage() {
     .map((req) => req.submittedAt)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+  const emailedCount = requests.filter((req) => Boolean(req.sentAt)).length;
+  const deliveryIssueCount = requests.filter((req) => Boolean(req.lastError)).length;
+  const manualFallbackCount = requests.filter((req) => isManualFallback(req)).length;
 
   return (
     <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
@@ -296,6 +304,17 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {requests.length > 0 && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Delivery Visibility</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card label="Broker Emails Sent" value={emailedCount} color="text-blue-300" />
+            <Card label="Delivery Issues" value={deliveryIssueCount} color="text-red-400" />
+            <Card label="Manual Fallbacks" value={manualFallbackCount} color="text-orange-400" />
+          </div>
+        </section>
+      )}
+
       {/* Action Required Tasks */}
       {tasks.length > 0 && (
         <section>
@@ -358,26 +377,46 @@ export default function DashboardPage() {
       {requests.length > 0 && (
         <section>
           <h2 className="text-xl font-semibold mb-4">Broker Requests</h2>
-          <div className="border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="border border-gray-800 rounded-lg overflow-x-auto">
+            <table className="min-w-full text-sm">
               <thead className="bg-gray-900 text-gray-400">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium">Broker</th>
                   <th className="text-left px-4 py-3 font-medium">Category</th>
                   <th className="text-left px-4 py-3 font-medium">Method</th>
+                  <th className="text-left px-4 py-3 font-medium">Delivery</th>
                   <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-left px-4 py-3 font-medium">SLA</th>
                   <th className="text-left px-4 py-3 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {requests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-900/50">
-                    <td className="px-4 py-3 font-medium">{req.broker.name}</td>
+                {requests.map((req) => {
+                  const delivery = getDeliveryView(req);
+
+                  return (
+                  <tr key={req.id} className="hover:bg-gray-900/50 align-top">
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{req.broker.name}</div>
+                      <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
+                    </td>
                     <td className="px-4 py-3 text-gray-400">
                       {req.broker.category.replace(/_/g, " ")}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{req.method}</td>
+                    <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
+                    <td className="px-4 py-3">
+                      <div className="min-w-[18rem]">
+                        <p className={`font-medium ${delivery.titleClassName}`}>
+                          {delivery.title}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
+                        {delivery.failure && (
+                          <p className="mt-2 text-xs text-red-300">
+                            Last failure: {delivery.failure}
+                          </p>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={req.status} />
                     </td>
@@ -385,19 +424,39 @@ export default function DashboardPage() {
                       <SLACountdown deadline={req.deadline} />
                     </td>
                     <td className="px-4 py-3">
-                      {req.status === "requires_user_action" && req.removalUrl && (
-                        <a
-                          href={req.removalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-red-400 hover:text-red-300 underline text-xs"
-                        >
-                          Complete removal →
-                        </a>
-                      )}
+                      <div className="flex min-w-[14rem] flex-col gap-2">
+                        {(req.status === "requires_user_action" || req.method === "manual_link") &&
+                          req.removalUrl && (
+                            <a
+                              href={req.removalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-red-400 hover:text-red-300 underline text-xs"
+                            >
+                              {isManualFallback(req) ? "Finish manually →" : "Open opt-out link →"}
+                            </a>
+                          )}
+                        {isManualFallback(req) ? (
+                          <p className="text-xs text-orange-300">
+                            Email automation failed, so this broker was moved to a manual fallback.
+                          </p>
+                        ) : req.sentAt ? (
+                          <p className="text-xs text-gray-500">
+                            No action needed unless the broker asks for more information.
+                          </p>
+                        ) : req.method === "manual_link" ? (
+                          <p className="text-xs text-gray-500">
+                            Use the direct broker link to complete this opt-out.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            Delivery is being tracked automatically.
+                          </p>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
@@ -484,4 +543,96 @@ function Card({
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString();
+}
+
+function isManualFallback(req: RemovalRequest) {
+  return req.method === "manual_link" && Boolean(req.lastError);
+}
+
+function getDeliveryView(req: RemovalRequest): {
+  title: string;
+  detail: string;
+  failure: string | null;
+  titleClassName: string;
+} {
+  if (req.lastError) {
+    const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
+
+    if (isManualFallback(req)) {
+      return {
+        title: "Email failed, manual fallback ready",
+        detail: attemptedAt
+          ? `Last delivery attempt ran on ${formatDateTime(attemptedAt)}. A manual broker link is ready instead.`
+          : "Email delivery failed and the request fell back to a manual broker link.",
+        failure: trimMessage(req.lastError),
+        titleClassName: "text-orange-300",
+      };
+    }
+
+    return {
+      title: "Delivery issue detected",
+      detail: attemptedAt
+        ? `The last delivery attempt was recorded on ${formatDateTime(attemptedAt)}.`
+        : "A broker delivery attempt failed and may need another retry.",
+      failure: trimMessage(req.lastError),
+      titleClassName: "text-red-300",
+    };
+  }
+
+  if (req.sentAt) {
+    return {
+      title: "Broker email sent",
+      detail: req.providerMessageId
+        ? `Sent ${formatDateTime(req.sentAt)}. Provider id: ${shortId(req.providerMessageId)}`
+        : `Sent ${formatDateTime(req.sentAt)}.`,
+      failure: null,
+      titleClassName: "text-blue-300",
+    };
+  }
+
+  if (req.method === "manual_link") {
+    return {
+      title: "Manual link generated",
+      detail: "This broker currently relies on a direct manual opt-out link instead of outbound email.",
+      failure: null,
+      titleClassName: "text-orange-300",
+    };
+  }
+
+  if (req.method === "form") {
+    return {
+      title: "Form automation path",
+      detail: "This broker is tracked as a form-based workflow rather than an email send.",
+      failure: null,
+      titleClassName: "text-gray-300",
+    };
+  }
+
+  if (req.method === "api") {
+    return {
+      title: "API workflow path",
+      detail: "This broker is tracked as an API-based workflow rather than an email send.",
+      failure: null,
+      titleClassName: "text-gray-300",
+    };
+  }
+
+  return {
+    title: "Waiting to send",
+    detail: req.attemptCount > 0
+      ? "A previous send attempt was recorded, but the request is still waiting on delivery."
+      : "This broker email is queued but has not been sent yet.",
+    failure: null,
+    titleClassName: "text-gray-300",
+  };
+}
+
+function trimMessage(value: string, maxLength = 160) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function shortId(value: string, maxLength = 20) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, 8)}…${value.slice(-8)}`;
 }
