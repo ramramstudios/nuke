@@ -11,8 +11,12 @@ export async function GET() {
       domain: true,
       category: true,
       removalMethod: true,
+      removalEndpoint: true,
       slaInDays: true,
       tier: true,
+      priority: true,
+      optOutInstructions: true,
+      notes: true,
     },
   });
 

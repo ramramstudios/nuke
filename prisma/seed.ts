@@ -17,6 +17,9 @@ async function main() {
         removalEndpoint: seed.removalEndpoint,
         slaInDays: seed.slaInDays,
         tier: seed.tier,
+        priority: seed.priority ?? "standard",
+        active: seed.active ?? true,
+        optOutInstructions: seed.optOutInstructions ?? null,
         notes: seed.notes ?? null,
       },
       create: {
@@ -28,6 +31,9 @@ async function main() {
         removalEndpoint: seed.removalEndpoint,
         slaInDays: seed.slaInDays,
         tier: seed.tier,
+        priority: seed.priority ?? "standard",
+        active: seed.active ?? true,
+        optOutInstructions: seed.optOutInstructions ?? null,
         notes: seed.notes ?? null,
       },
     });
@@ -39,24 +45,6 @@ async function main() {
       active: false,
       notes:
         "Legacy broker entry replaced by PeopleFinders web opt-out flow on peoplefinders.com/opt-out.",
-    },
-  });
-
-  await prisma.broker.updateMany({
-    where: { name: "USSearch" },
-    data: {
-      active: false,
-      notes:
-        "Excluded from the vetted email broker set pending verification of the official PeopleConnect suppression flow for USSearch.",
-    },
-  });
-
-  await prisma.broker.updateMany({
-    where: { name: "Datalogix" },
-    data: {
-      active: false,
-      notes:
-        "Retired standalone broker entry. Datalogix was acquired by Oracle and the datalogix.com consumer mailbox/domain is no longer valid.",
     },
   });
 

@@ -57,7 +57,9 @@ model Broker {
   removalEndpoint String?  // URL, email address, or API endpoint
   slaInDays       Int      @default(45)
   tier            Int      @default(1) // 1 = automated MVP, 2 = extensible
+  priority        String   @default("standard") // critical | high | standard
   active          Boolean  @default(true)
+  optOutInstructions String?
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

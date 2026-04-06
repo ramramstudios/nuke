@@ -111,7 +111,7 @@ If you want a safe rehearsal first, use:
 1. Click **Get Started** → create an account (email + password)
 2. Enter your personal information (encrypted before storage)
 3. You're redirected to the **Dashboard**
-4. Click **Run Scan** → discovers simulated exposures across 20 brokers
+4. Click **Run Scan** → discovers simulated exposures across the seeded broker registry
 5. Click **Submit Removal** → dispatches deletion requests to all brokers
 6. Requests with `requires_user_action` status show direct removal links
 7. Hit `POST /api/simulate` to advance the simulation (brokers acknowledge/complete)
@@ -184,7 +184,7 @@ src/
 ├── lib/
 │   ├── auth/          # JWT signing/verification, bcrypt passwords
 │   ├── crypto/        # AES-256-GCM encryption for PII fields
-│   ├── brokers/       # Broker seed registry (20 real brokers)
+│   ├── brokers/       # Broker seed registry and opt-out metadata
 │   ├── crawler/       # Discovery/scanning engine
 │   ├── dispatcher/    # DROP-style centralized deletion dispatch
 │   ├── removal/       # Removal engine (API → form → email → fallback)
@@ -197,7 +197,7 @@ src/
 │   └── SLACountdown.tsx   # Days-remaining / overdue indicator
 prisma/
 ├── schema.prisma      # Full data model
-└── seed.ts            # Seeds 20 real broker entries
+└── seed.ts            # Seeds the broker registry into the database
 ```
 
 ---
@@ -214,12 +214,12 @@ Users submit their data **once**. The system:
 
 ### Broker Registry
 
-20 real-world brokers seeded across categories:
+Dozens of broker records are seeded across categories:
 - **People search**: Spokeo, BeenVerified, Whitepages, Radaris, etc.
 - **Data brokers**: Acxiom, LexisNexis, CoreLogic, Epsilon
 - **Marketing/analytics**: LiveRamp, Clearbit, FullContact
 
-Each broker defines: domain, search method, removal method, SLA, and tier.
+Each broker defines: domain, search method, removal method, SLA, tier, priority, and opt-out instructions.
 
 ### Removal Priority Chain
 
