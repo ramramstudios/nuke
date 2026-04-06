@@ -1,23 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   getResponseErrorMessage,
   parseJsonResponse,
 } from "@/lib/http/client-response";
 
+type Step = "register" | "login" | "profile";
+type FeedbackTone = "error" | "info";
+type FieldName =
+  | "email"
+  | "password"
+  | "fullName"
+  | "profileEmail"
+  | "phone"
+  | "street"
+  | "city"
+  | "state"
+  | "zip";
+
+interface FeedbackState {
+  text: string;
+  tone: FeedbackTone;
+}
+
+const INITIAL_TOUCHED: Record<FieldName, boolean> = {
+  email: false,
+  password: false,
+  fullName: false,
+  profileEmail: false,
+  phone: false,
+  street: false,
+  city: false,
+  state: false,
+  zip: false,
+};
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9()+.\-\s]{7,20}$/;
+const STATE_PATTERN = /^[A-Za-z]{2}$/;
+const ZIP_PATTERN = /^\d{5}(?:-\d{4})?$/;
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"register" | "login" | "profile">("register");
+  const [step, setStep] = useState<Step>("register");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [supportsPasskeys, setSupportsPasskeys] = useState(false);
+  const [submittedStep, setSubmittedStep] = useState<Step | null>(null);
+  const [touched, setTouched] = useState<Record<FieldName, boolean>>({
+    ...INITIAL_TOUCHED,
+  });
 
-  // Registration form
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Profile form
   const [fullName, setFullName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -27,11 +72,27 @@ export default function OnboardingPage() {
   const [zip, setZip] = useState("");
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setSupportsPasskeys(
+        typeof window.PublicKeyCredential !== "undefined"
+      );
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrateAuthState() {
       const res = await fetch("/api/auth/me");
-      const payload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(res);
+      const payload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(
+        res
+      );
 
       if (cancelled) {
         return;
@@ -39,28 +100,29 @@ export default function OnboardingPage() {
 
       if (!res.ok) {
         if (res.status !== 401) {
-          setError(
-            getResponseErrorMessage(
+          setFeedback({
+            text: getResponseErrorMessage(
               payload,
               "Could not check your current session."
-            )
-          );
+            ),
+            tone: "error",
+          });
         }
         return;
       }
 
       if (!payload.data) {
-        setError(
-          getResponseErrorMessage(payload, "Could not read your current session.")
-        );
+        setFeedback({
+          text: getResponseErrorMessage(
+            payload,
+            "Could not read your current session."
+          ),
+          tone: "error",
+        });
         return;
       }
 
       const me = payload.data;
-      if (cancelled) {
-        return;
-      }
-
       if (me.hasProfile) {
         router.replace("/dashboard");
         return;
@@ -69,6 +131,8 @@ export default function OnboardingPage() {
       setProfileEmail(me.email);
       setEmail(me.email);
       setStep("profile");
+      setSubmittedStep(null);
+      setShowPassword(false);
     }
 
     void hydrateAuthState();
@@ -78,10 +142,98 @@ export default function OnboardingPage() {
     };
   }, [router]);
 
+  const authEmailError = validateEmail(email);
+  const authPasswordError = validatePassword(password, step);
+  const profileNameError = validateFullName(fullName);
+  const profileEmailError = validateEmail(profileEmail);
+  const profilePhoneError = validatePhone(phone);
+  const profileStateError = validateStateValue(state);
+  const profileZipError = validateZip(zip);
+
+  const addressStarted = [street, city, state, zip].some((value) => value.trim().length > 0);
+  const addressComplete = [street, city, state, zip].every((value) => value.trim().length > 0);
+  const addressError =
+    addressStarted && !addressComplete
+      ? "Complete all address fields to include a physical address in broker requests."
+      : null;
+
+  function markTouched(field: FieldName) {
+    setTouched((current) =>
+      current[field] ? current : { ...current, [field]: true }
+    );
+  }
+
+  function markFieldsTouched(fields: FieldName[]) {
+    setTouched((current) => {
+      const next = { ...current };
+      for (const field of fields) {
+        next[field] = true;
+      }
+      return next;
+    });
+  }
+
+  function resetFormFeedback(nextStep: Step) {
+    setFeedback(null);
+    setSubmittedStep(null);
+    setShowPassword(false);
+    if (nextStep !== "profile") {
+      setTouched((current) => ({
+        ...current,
+        email: false,
+        password: false,
+      }));
+    }
+  }
+
+  function switchStep(nextStep: Step) {
+    resetFormFeedback(nextStep);
+    setStep(nextStep);
+  }
+
+  function announceUnavailableOption(option: "google" | "apple" | "passkey" | "recovery") {
+    if (option === "passkey") {
+      setFeedback({
+        text: supportsPasskeys
+          ? "This device supports passkeys, but passkey and biometric sign-in are not enabled on this deployment yet."
+          : "Passkey and biometric sign-in are not available in this browser yet.",
+        tone: "info",
+      });
+      return;
+    }
+
+    if (option === "recovery") {
+      setFeedback({
+        text: "Password recovery is not enabled in this build yet. If you are testing locally, create a fresh account or reset the local database.",
+        tone: "info",
+      });
+      return;
+    }
+
+    setFeedback({
+      text:
+        option === "google"
+          ? "Google sign-in is not enabled in this deployment yet."
+          : "Apple sign-in is not enabled in this deployment yet.",
+      tone: "info",
+    });
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    setSubmittedStep("register");
+    setFeedback(null);
+
+    if (authEmailError || authPasswordError) {
+      markFieldsTouched(["email", "password"]);
+      setFeedback({
+        text: "Review the highlighted fields before creating your account.",
+        tone: "error",
+      });
+      return;
+    }
+
     setLoading(true);
-    setError("");
 
     const res = await fetch("/api/auth/register", {
       method: "POST",
@@ -91,20 +243,40 @@ export default function OnboardingPage() {
     const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      setError(getResponseErrorMessage(payload, "Registration failed"));
+      setFeedback({
+        text: getResponseErrorMessage(payload, "Registration failed"),
+        tone: "error",
+      });
       setLoading(false);
       return;
     }
 
     setProfileEmail(email);
+    setSubmittedStep(null);
+    setShowPassword(false);
     setStep("profile");
     setLoading(false);
+    setFeedback({
+      text: "Account created. Add your details to start discovery and removals.",
+      tone: "info",
+    });
   }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    setSubmittedStep("login");
+    setFeedback(null);
+
+    if (authEmailError || authPasswordError) {
+      markFieldsTouched(["email", "password"]);
+      setFeedback({
+        text: "Enter a valid email and password before signing in.",
+        tone: "error",
+      });
+      return;
+    }
+
     setLoading(true);
-    setError("");
 
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -114,20 +286,27 @@ export default function OnboardingPage() {
     const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      setError(getResponseErrorMessage(payload, "Login failed"));
+      setFeedback({
+        text: getResponseErrorMessage(payload, "Login failed"),
+        tone: "error",
+      });
       setLoading(false);
       return;
     }
 
     const meRes = await fetch("/api/auth/me");
-    const mePayload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(meRes);
+    const mePayload = await parseJsonResponse<{ email: string; hasProfile: boolean }>(
+      meRes
+    );
+
     if (!meRes.ok || !mePayload.data) {
-      setError(
-        getResponseErrorMessage(
+      setFeedback({
+        text: getResponseErrorMessage(
           mePayload,
           "Login succeeded, but your session could not be loaded."
-        )
-      );
+        ),
+        tone: "error",
+      });
       setLoading(false);
       return;
     }
@@ -135,8 +314,13 @@ export default function OnboardingPage() {
     const me = mePayload.data;
     if (!me.hasProfile) {
       setProfileEmail(me.email);
+      setSubmittedStep(null);
       setStep("profile");
       setLoading(false);
+      setFeedback({
+        text: "You are signed in. Finish your profile so NUKE can generate broker-ready requests.",
+        tone: "info",
+      });
       return;
     }
 
@@ -145,8 +329,27 @@ export default function OnboardingPage() {
 
   async function handleProfile(e: React.FormEvent) {
     e.preventDefault();
+    setSubmittedStep("profile");
+    setFeedback(null);
+
+    if (profileNameError || profileEmailError || profilePhoneError || profileStateError || profileZipError || addressError) {
+      markFieldsTouched([
+        "fullName",
+        "profileEmail",
+        "phone",
+        "street",
+        "city",
+        "state",
+        "zip",
+      ]);
+      setFeedback({
+        text: "Review the highlighted profile fields before continuing.",
+        tone: "error",
+      });
+      return;
+    }
+
     setLoading(true);
-    setError("");
 
     const res = await fetch("/api/intake", {
       method: "POST",
@@ -159,14 +362,15 @@ export default function OnboardingPage() {
           street && city && state && zip
             ? [{ street, city, state, zip }]
             : [],
-        }),
+      }),
     });
     const payload = await parseJsonResponse<{ error?: string }>(res);
 
     if (!res.ok) {
-      setError(
-        getResponseErrorMessage(payload, "Failed to save profile")
-      );
+      setFeedback({
+        text: getResponseErrorMessage(payload, "Failed to save profile"),
+        tone: "error",
+      });
       setLoading(false);
       return;
     }
@@ -174,184 +378,656 @@ export default function OnboardingPage() {
     router.push("/dashboard");
   }
 
+  const showAuthEmailError = touched.email || submittedStep === step;
+  const showAuthPasswordError = touched.password || submittedStep === step;
+  const showProfileNameError = touched.fullName || submittedStep === "profile";
+  const showProfileEmailError = touched.profileEmail || submittedStep === "profile";
+  const showProfilePhoneError = touched.phone || submittedStep === "profile";
+  const showProfileStateError = touched.state || submittedStep === "profile";
+  const showProfileZipError = touched.zip || submittedStep === "profile";
+  const showAddressError =
+    touched.street ||
+    touched.city ||
+    touched.state ||
+    touched.zip ||
+    submittedStep === "profile";
+
   return (
-    <main className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex rounded-lg border border-gray-800 bg-gray-950 p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              setError("");
-              setStep("register");
-            }}
-            className={`flex-1 rounded-md px-3 py-2 transition-colors ${
-              step === "register"
-                ? "bg-red-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Create Account
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setError("");
-              setStep("login");
-            }}
-            className={`flex-1 rounded-md px-3 py-2 transition-colors ${
-              step === "login"
-                ? "bg-red-600 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Log In
-          </button>
-        </div>
+    <main className="relative flex-1 overflow-hidden px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.14),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(248,113,113,0.08),transparent_28%)]" />
 
-        <h1 className="text-3xl font-bold text-center">
-          {step === "profile"
-            ? "Your Information"
-            : step === "login"
-              ? "Welcome Back"
-              : "Create Account"}
-        </h1>
-        <p className="text-gray-400 text-center text-sm">
-          {step === "profile"
-            ? "We need this to find and remove your data. All fields are encrypted."
-            : step === "login"
-              ? "Sign in to continue tracking and submitting removals"
-              : "Sign up to start removing your data"}
-        </p>
-
-        {error && (
-          <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-2 rounded text-sm">
-            {error}
+      <div className="relative mx-auto grid min-h-full w-full max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <section className="auth-enter rounded-[2rem] border border-white/8 bg-white/3 p-6 backdrop-blur-sm sm:p-8 lg:p-10">
+          <div className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-red-200">
+            Private by default
           </div>
-        )}
 
-        {step === "register" ? (
-          <form onSubmit={handleRegister} className="space-y-4">
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+          <div className="mt-6 max-w-2xl space-y-5">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+              Privacy operations without the messy handoff.
+            </h1>
+            <p className="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+              Create an account, verify your profile, and move from discovery to broker
+              outreach inside one focused workspace built for clarity and auditability.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <TrustStat label="Encrypted intake" value="AES-256" />
+            <TrustStat label="Broker tracking" value="Live status" />
+            <TrustStat label="Retry policy" value="7d / 14d" />
+          </div>
+
+          <div className="mt-8 grid gap-3">
+            <TrustPoint
+              title="Clear next steps"
+              body="Every auth state points you toward sign in, sign up, or finishing your profile without dead ends."
             />
-            <input
-              type="password"
-              placeholder="Password (min 8 chars)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+            <TrustPoint
+              title="High-signal feedback"
+              body="Inline validation, focused error states, and keyboard-friendly controls reduce friction before a request is ever submitted."
             />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
-            >
-              {loading ? "Creating account…" : "Continue"}
-            </button>
-          </form>
-        ) : step === "login" ? (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+            <TrustPoint
+              title="Secure foundations"
+              body="Sessions stay cookie-based, sensitive profile data is encrypted at rest, and broker outreach only starts after you confirm your details."
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
-            >
-              {loading ? "Signing in…" : "Go to Dashboard"}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleProfile} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Full legal name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-            <input
-              type="email"
-              placeholder="Primary email"
-              value={profileEmail}
-              onChange={(e) => setProfileEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-            <input
-              type="tel"
-              placeholder="Phone number (optional)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-            <div className="border-t border-gray-800 pt-4">
-              <p className="text-sm text-gray-500 mb-3">Address (optional)</p>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Street"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-                />
-                <div className="grid grid-cols-3 gap-3">
-                  <input
-                    type="text"
-                    placeholder="City"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+          </div>
+        </section>
+
+        <section className="auth-enter rounded-[2rem] border border-white/10 bg-slate-950/85 p-5 shadow-[0_32px_120px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-7">
+          <div className="rounded-[1.5rem] border border-white/8 bg-slate-900/70 p-4 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-red-200">
+                  {step === "profile" ? "Complete setup" : "Secure account access"}
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                  {step === "register"
+                    ? "Create your account"
+                    : step === "login"
+                      ? "Welcome back"
+                      : "Finish your profile"}
+                </h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
+                  {step === "register"
+                    ? "Start with email and password, then add the personal details needed for broker removal requests."
+                    : step === "login"
+                      ? "Sign in to review active requests, delivery status, and any follow-up actions."
+                      : "These details stay encrypted and are used to match you against broker records accurately."}
+                </p>
+              </div>
+              {step !== "profile" && (
+                <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200">
+                  Cookie session protected
+                </div>
+              )}
+            </div>
+
+            {step !== "profile" && (
+              <>
+                <div
+                  className="mt-6 grid grid-cols-2 rounded-2xl border border-white/8 bg-slate-950/80 p-1"
+                  role="tablist"
+                  aria-label="Authentication mode"
+                >
+                  <AuthModeButton
+                    active={step === "register"}
+                    label="Create account"
+                    onClick={() => switchStep("register")}
                   />
-                  <input
-                    type="text"
-                    placeholder="State"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    className="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    placeholder="ZIP"
-                    value={zip}
-                    onChange={(e) => setZip(e.target.value)}
-                    className="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
+                  <AuthModeButton
+                    active={step === "login"}
+                    label="Log in"
+                    onClick={() => switchStep("login")}
                   />
                 </div>
+
+                <div className="mt-6 space-y-3">
+                  <AlternativeAuthButton
+                    badge="Soon"
+                    description="Use your work or personal Google account."
+                    label="Continue with Google"
+                    onClick={() => announceUnavailableOption("google")}
+                  />
+                  <AlternativeAuthButton
+                    badge="Soon"
+                    description="Fast sign-in for Apple users on supported devices."
+                    label="Continue with Apple"
+                    onClick={() => announceUnavailableOption("apple")}
+                  />
+                  <AlternativeAuthButton
+                    badge={supportsPasskeys ? "Device ready" : "Unsupported"}
+                    description="Use a passkey or biometric factor when deployment support is enabled."
+                    label="Use a passkey"
+                    onClick={() => announceUnavailableOption("passkey")}
+                  />
+                </div>
+
+                <div className="my-6 flex items-center gap-4 text-xs uppercase tracking-[0.22em] text-slate-500">
+                  <span className="h-px flex-1 bg-white/8" />
+                  <span>Email and password</span>
+                  <span className="h-px flex-1 bg-white/8" />
+                </div>
+              </>
+            )}
+
+            {feedback && (
+              <div
+                aria-live="polite"
+                className={`mb-6 rounded-2xl border px-4 py-3 text-sm leading-6 ${
+                  feedback.tone === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-100"
+                    : "border-sky-400/20 bg-sky-400/10 text-sky-100"
+                }`}
+                role={feedback.tone === "error" ? "alert" : "status"}
+              >
+                {feedback.text}
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
-            >
-              {loading ? "Saving…" : "Save & Go to Dashboard"}
-            </button>
-          </form>
-        )}
+            )}
+
+            {step === "register" ? (
+              <form
+                noValidate
+                onSubmit={handleRegister}
+                className="space-y-5"
+                aria-busy={loading}
+              >
+                <AuthField
+                  autoComplete="email"
+                  error={showAuthEmailError ? authEmailError : null}
+                  helperText="Use the email you want tied to removal requests and status updates."
+                  label="Email address"
+                  onBlur={() => markTouched("email")}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setFeedback(null);
+                  }}
+                  placeholder="name@example.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+                <AuthField
+                  autoComplete="new-password"
+                  error={showAuthPasswordError ? authPasswordError : null}
+                  helperText="At least 8 characters. Longer passwords are better."
+                  label="Password"
+                  onBlur={() => markTouched("password")}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setFeedback(null);
+                  }}
+                  placeholder="Create a strong password"
+                  required
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="rounded-lg px-2 py-1 text-sm font-medium text-slate-300 transition-colors hover:bg-white/6 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  }
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-red-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_14px_40px_rgba(239,68,68,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {loading ? "Creating account..." : "Continue securely"}
+                </button>
+                <p className="text-center text-sm text-slate-400">
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => switchStep("login")}
+                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                  >
+                    Sign in instead
+                  </button>
+                </p>
+              </form>
+            ) : step === "login" ? (
+              <form
+                noValidate
+                onSubmit={handleLogin}
+                className="space-y-5"
+                aria-busy={loading}
+              >
+                <AuthField
+                  autoComplete="email"
+                  error={showAuthEmailError ? authEmailError : null}
+                  helperText="Use the same email you registered with."
+                  label="Email address"
+                  onBlur={() => markTouched("email")}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setFeedback(null);
+                  }}
+                  placeholder="name@example.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+                <AuthField
+                  autoComplete="current-password"
+                  error={showAuthPasswordError ? authPasswordError : null}
+                  helperText="Your password stays on this device until it is sent securely."
+                  label="Password"
+                  onBlur={() => markTouched("password")}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setFeedback(null);
+                  }}
+                  placeholder="Enter your password"
+                  required
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="rounded-lg px-2 py-1 text-sm font-medium text-slate-300 transition-colors hover:bg-white/6 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  }
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                />
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-slate-500">
+                    Fastest path back to your dashboard.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => announceUnavailableOption("recovery")}
+                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-red-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_14px_40px_rgba(239,68,68,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {loading ? "Signing in..." : "Go to dashboard"}
+                </button>
+                <p className="text-center text-sm text-slate-400">
+                  New here?{" "}
+                  <button
+                    type="button"
+                    onClick={() => switchStep("register")}
+                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                  >
+                    Create an account
+                  </button>
+                </p>
+              </form>
+            ) : (
+              <form
+                noValidate
+                onSubmit={handleProfile}
+                className="space-y-6"
+                aria-busy={loading}
+              >
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <AuthField
+                      autoComplete="name"
+                      error={showProfileNameError ? profileNameError : null}
+                      helperText="Use the name most likely to appear in broker listings."
+                      label="Full legal name"
+                      onBlur={() => markTouched("fullName")}
+                      onChange={(event) => {
+                        setFullName(event.target.value);
+                        setFeedback(null);
+                      }}
+                      placeholder="Jordan Avery"
+                      required
+                      value={fullName}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <AuthField
+                      autoComplete="email"
+                      error={showProfileEmailError ? profileEmailError : null}
+                      helperText="This stays tied to account recovery and broker correspondence."
+                      label="Primary email"
+                      onBlur={() => markTouched("profileEmail")}
+                      onChange={(event) => {
+                        setProfileEmail(event.target.value);
+                        setFeedback(null);
+                      }}
+                      placeholder="name@example.com"
+                      required
+                      type="email"
+                      value={profileEmail}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <AuthField
+                      autoComplete="tel"
+                      error={showProfilePhoneError ? profilePhoneError : null}
+                      helperText="Optional, but helpful for brokers that match records by phone."
+                      label="Phone number"
+                      onBlur={() => markTouched("phone")}
+                      onChange={(event) => {
+                        setPhone(event.target.value);
+                        setFeedback(null);
+                      }}
+                      placeholder="(312) 555-0123"
+                      type="tel"
+                      value={phone}
+                    />
+                  </div>
+                </div>
+
+                <FormSection
+                  title="Address details"
+                  description="Optional, but useful for people-search brokers. Leave it blank unless you want us to include it."
+                >
+                  <AuthField
+                    autoComplete="street-address"
+                    error={showAddressError && addressError ? addressError : null}
+                    helperText="Street address"
+                    label="Street"
+                    onBlur={() => markTouched("street")}
+                    onChange={(event) => {
+                      setStreet(event.target.value);
+                      setFeedback(null);
+                    }}
+                    placeholder="123 Main St"
+                    value={street}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-[1.3fr_0.8fr_0.9fr]">
+                    <AuthField
+                      autoComplete="address-level2"
+                      error={showAddressError && addressError ? addressError : null}
+                      helperText="City"
+                      label="City"
+                      onBlur={() => markTouched("city")}
+                      onChange={(event) => {
+                        setCity(event.target.value);
+                        setFeedback(null);
+                      }}
+                      placeholder="Chicago"
+                      value={city}
+                    />
+                    <AuthField
+                      autoComplete="address-level1"
+                      error={showProfileStateError ? profileStateError : null}
+                      helperText="State"
+                      label="State"
+                      maxLength={2}
+                      onBlur={() => markTouched("state")}
+                      onChange={(event) => {
+                        setState(event.target.value.toUpperCase());
+                        setFeedback(null);
+                      }}
+                      placeholder="IL"
+                      value={state}
+                    />
+                    <AuthField
+                      autoComplete="postal-code"
+                      error={showProfileZipError ? profileZipError : null}
+                      helperText="ZIP"
+                      label="ZIP"
+                      onBlur={() => markTouched("zip")}
+                      onChange={(event) => {
+                        setZip(event.target.value);
+                        setFeedback(null);
+                      }}
+                      placeholder="60601"
+                      value={zip}
+                    />
+                  </div>
+                </FormSection>
+
+                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/8 px-4 py-3 text-sm leading-6 text-emerald-100">
+                  Your profile details are encrypted before they are stored and only used to
+                  assemble broker-facing deletion requests.
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-red-500 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_14px_40px_rgba(239,68,68,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {loading ? "Saving profile..." : "Save and continue"}
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
+}
+
+function AuthModeButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`rounded-[1rem] px-4 py-3 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
+        active
+          ? "bg-white text-slate-950 shadow-sm"
+          : "text-slate-400 hover:bg-white/6 hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AlternativeAuthButton({
+  badge,
+  description,
+  label,
+  onClick,
+}: {
+  badge: string;
+  description: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center justify-between gap-4 rounded-2xl border border-white/8 bg-slate-950/70 px-4 py-3 text-left transition-all duration-200 hover:border-white/16 hover:bg-white/4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+    >
+      <div>
+        <p className="text-sm font-medium text-white">{label}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+      </div>
+      <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-xs font-medium text-slate-300">
+        {badge}
+      </span>
+    </button>
+  );
+}
+
+function AuthField({
+  error,
+  helperText,
+  label,
+  trailing,
+  ...inputProps
+}: InputHTMLAttributes<HTMLInputElement> & {
+  error?: string | null;
+  helperText?: string;
+  label: string;
+  trailing?: ReactNode;
+}) {
+  const id = useId();
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = [helperText ? hintId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={id} className="text-sm font-medium text-white">
+          {label}
+        </label>
+        {inputProps.required && (
+          <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            Required
+          </span>
+        )}
+      </div>
+      <div className="relative">
+        <input
+          {...inputProps}
+          id={id}
+          aria-describedby={describedBy || undefined}
+          aria-invalid={Boolean(error)}
+          className={`w-full rounded-2xl border bg-slate-950/90 px-4 py-3.5 text-base text-white placeholder:text-slate-500 transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
+            trailing ? "pr-20" : ""
+          } ${
+            error
+              ? "border-red-400/60 shadow-[0_0_0_1px_rgba(248,113,113,0.2)]"
+              : "border-white/10 hover:border-white/20 focus:border-red-400/60"
+          }`}
+        />
+        {trailing && (
+          <div className="absolute inset-y-0 right-2 flex items-center">
+            {trailing}
+          </div>
+        )}
+      </div>
+      {error ? (
+        <p id={errorId} className="text-sm leading-6 text-red-200">
+          {error}
+        </p>
+      ) : helperText ? (
+        <p id={hintId} className="text-sm leading-6 text-slate-500">
+          {helperText}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function FormSection({
+  children,
+  description,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  title: string;
+}) {
+  return (
+    <section className="space-y-4 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-4 sm:p-5">
+      <div>
+        <h3 className="text-base font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function TrustStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.5rem] border border-white/8 bg-slate-950/45 p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function TrustPoint({ body, title }: { body: string; title: string }) {
+  return (
+    <div className="rounded-[1.5rem] border border-white/8 bg-slate-950/35 p-4">
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
+    </div>
+  );
+}
+
+function validateEmail(value: string): string | null {
+  if (!value.trim()) {
+    return "Enter an email address.";
+  }
+
+  if (!EMAIL_PATTERN.test(value.trim())) {
+    return "Use a valid email address like name@example.com.";
+  }
+
+  return null;
+}
+
+function validatePassword(value: string, step: Step): string | null {
+  if (!value) {
+    return "Enter your password.";
+  }
+
+  if (step === "register" && value.length < 8) {
+    return "Use at least 8 characters for a stronger password.";
+  }
+
+  return null;
+}
+
+function validateFullName(value: string): string | null {
+  if (!value.trim()) {
+    return "Enter your full legal name.";
+  }
+
+  return null;
+}
+
+function validatePhone(value: string): string | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  if (!PHONE_PATTERN.test(value.trim())) {
+    return "Use digits and standard phone punctuation only.";
+  }
+
+  return null;
+}
+
+function validateStateValue(value: string): string | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  if (!STATE_PATTERN.test(value.trim())) {
+    return "Use the 2-letter state code.";
+  }
+
+  return null;
+}
+
+function validateZip(value: string): string | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  if (!ZIP_PATTERN.test(value.trim())) {
+    return "Use a 5-digit ZIP code or ZIP+4.";
+  }
+
+  return null;
 }

@@ -36,12 +36,22 @@ export async function parseJsonResponse<T>(
   }
 }
 
-export function getResponseErrorMessage(
-  response: ParsedJsonResponse<{ error?: unknown }>,
+export function getResponseErrorMessage<T>(
+  response: ParsedJsonResponse<T>,
   fallback: string
 ): string {
-  if (typeof response.data?.error === "string" && response.data.error.length > 0) {
-    return response.data.error;
+  const errorValue = extractErrorValue(response.data);
+
+  if (typeof errorValue === "string" && errorValue.length > 0) {
+    return errorValue;
+  }
+
+  if (Array.isArray(errorValue) && errorValue.length > 0) {
+    return errorValue.join(", ");
+  }
+
+  if (typeof errorValue === "object" && errorValue !== null) {
+    return fallback;
   }
 
   if (looksLikeHtml(response.rawText)) {
@@ -58,4 +68,12 @@ export function getResponseErrorMessage(
 function looksLikeHtml(value: string): boolean {
   const normalized = value.trimStart().toLowerCase();
   return normalized.startsWith("<!doctype html") || normalized.startsWith("<html");
+}
+
+function extractErrorValue(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || !("error" in value)) {
+    return null;
+  }
+
+  return (value as { error?: unknown }).error ?? null;
 }
