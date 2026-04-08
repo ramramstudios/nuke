@@ -5,6 +5,7 @@ const colorMap: Record<string, string> = {
   completed: "bg-green-900/50 text-green-300 border-green-800",
   rejected: "bg-red-900/50 text-red-300 border-red-800",
   requires_user_action: "bg-orange-900/50 text-orange-300 border-orange-800",
+  pending_review: "bg-cyan-950/50 text-cyan-200 border-cyan-800",
   running: "bg-blue-900/50 text-blue-300 border-blue-800",
   failed: "bg-red-900/50 text-red-300 border-red-800",
 };

@@ -311,6 +311,12 @@ export default function ProfilePage() {
           >
             View Scan Results
           </Link>
+          <Link
+            href="/dashboard/review"
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
+          >
+            Review Queue
+          </Link>
           <button
             onClick={handleLogout}
             disabled={!!actionLoading}
