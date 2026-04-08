@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SLACountdown } from "@/components/SLACountdown";
@@ -9,6 +9,7 @@ import {
   getResponseErrorMessage,
   parseJsonResponse,
 } from "@/lib/http/client-response";
+import type { TimelineEvent, TimelineTone } from "@/lib/compliance/timeline";
 
 interface Summary {
   total: number;
@@ -74,6 +75,12 @@ export default function DashboardPage() {
   const [actionLoading, setActionLoading] = useState("");
   const [showResubmitConfirm, setShowResubmitConfirm] = useState(false);
   const [error, setError] = useState("");
+
+  // Timeline state: requestId → events (null = loading, [] = loaded empty)
+  const [openTimeline, setOpenTimeline] = useState<string | null>(null);
+  const [timelineData, setTimelineData] = useState<Record<string, TimelineEvent[]>>({});
+  const [timelineLoading, setTimelineLoading] = useState<string | null>(null);
+  const [timelineError, setTimelineError] = useState<Record<string, string>>({});
 
   // Custom request form
   const [customUrl, setCustomUrl] = useState("");
@@ -275,6 +282,70 @@ export default function DashboardPage() {
     await refreshDashboard();
   }
 
+  async function handleLogout() {
+    setActionLoading("logout");
+    await fetch("/api/auth/logout", { method: "POST" });
+    setActionLoading("");
+    router.push("/onboarding");
+  }
+
+  async function handleToggleTimeline(requestId: string) {
+    // Collapse if already open
+    if (openTimeline === requestId) {
+      setOpenTimeline(null);
+      return;
+    }
+
+    setOpenTimeline(requestId);
+
+    // Already fetched — reuse cached data and clear any stale error
+    if (requestId in timelineData) {
+      setTimelineError((prev) => {
+        if (!(requestId in prev)) return prev;
+        const next = { ...prev };
+        delete next[requestId];
+        return next;
+      });
+      return;
+    }
+
+    setTimelineError((prev) => {
+      if (!(requestId in prev)) return prev;
+      const next = { ...prev };
+      delete next[requestId];
+      return next;
+    });
+    setTimelineLoading(requestId);
+    try {
+      const res = await fetch(`/api/requests/${requestId}/timeline`);
+      const payload = await parseJsonResponse<TimelineEvent[]>(res);
+      if (!res.ok || !payload.data) {
+        setTimelineError((prev) => ({
+          ...prev,
+          [requestId]: getResponseErrorMessage(
+            payload,
+            "Could not load the communication timeline."
+          ),
+        }));
+      } else {
+        setTimelineError((prev) => {
+          if (!(requestId in prev)) return prev;
+          const next = { ...prev };
+          delete next[requestId];
+          return next;
+        });
+        setTimelineData((prev) => ({ ...prev, [requestId]: payload.data! }));
+      }
+    } catch {
+      setTimelineError((prev) => ({
+        ...prev,
+        [requestId]: "Could not load the communication timeline.",
+      }));
+    } finally {
+      setTimelineLoading(null);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex-1 flex items-center justify-center">
@@ -346,12 +417,12 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link
             href="/dashboard/scans"
             className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
@@ -371,6 +442,13 @@ export default function DashboardPage() {
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
           >
             {actionLoading === "remove" ? "Submitting…" : "Submit Removal"}
+          </button>
+          <button
+            onClick={handleLogout}
+            disabled={!!actionLoading}
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
+          >
+            {actionLoading === "logout" ? "Signing out…" : "Sign out"}
           </button>
         </div>
       </div>
@@ -568,77 +646,115 @@ export default function DashboardPage() {
                   <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-left px-4 py-3 font-medium">SLA</th>
                   <th className="text-left px-4 py-3 font-medium">Action</th>
+                  <th className="text-left px-4 py-3 font-medium">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {requests.map((req) => {
                   const delivery = getDeliveryView(req);
+                  const isOpen = openTimeline === req.id;
+                  const panelId = `timeline-${req.id}`;
 
                   return (
-                    <tr key={req.id} className="hover:bg-gray-900/50 align-top">
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{req.broker.name}</div>
-                        <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">
-                        {req.broker.category.replace(/_/g, " ")}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
-                      <td className="px-4 py-3">
-                        <div className="min-w-[18rem]">
-                          <p className={`font-medium ${delivery.titleClassName}`}>
-                            {delivery.title}
-                          </p>
-                          <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
-                          {delivery.failure && (
-                            <p className="mt-2 text-xs text-red-300">
-                              Last failure: {delivery.failure}
+                    <Fragment key={req.id}>
+                      <tr key={req.id} className="hover:bg-gray-900/50 align-top">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{req.broker.name}</div>
+                          <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">
+                          {req.broker.category.replace(/_/g, " ")}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
+                        <td className="px-4 py-3">
+                          <div className="min-w-[18rem]">
+                            <p className={`font-medium ${delivery.titleClassName}`}>
+                              {delivery.title}
                             </p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={req.status} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <SLACountdown deadline={req.deadline} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex min-w-[14rem] flex-col gap-2">
-                          {(req.status === "requires_user_action" || req.method === "manual_link") &&
-                            req.removalUrl && (
-                              <a
-                                href={req.removalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-red-400 hover:text-red-300 underline text-xs"
-                              >
-                                {isManualFallback(req)
-                                  ? "Open broker opt-out page →"
-                                  : "Open opt-out link →"}
-                              </a>
+                            <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
+                            {delivery.failure && (
+                              <p className="mt-2 text-xs text-red-300">
+                                Last failure: {delivery.failure}
+                              </p>
                             )}
-                          {isManualFallback(req) ? (
-                            <p className="text-xs text-orange-300">
-                              Next: open the broker page, complete their opt-out flow,
-                              and then check back here for any follow-up tasks.
-                            </p>
-                          ) : req.sentAt ? (
-                            <p className="text-xs text-gray-500">
-                              No action needed unless the broker asks for more information.
-                            </p>
-                          ) : req.method === "manual_link" ? (
-                            <p className="text-xs text-gray-500">
-                              Use the direct broker link to complete this opt-out.
-                            </p>
-                          ) : (
-                            <p className="text-xs text-gray-500">
-                              Delivery is being tracked automatically.
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={req.status} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <SLACountdown deadline={req.deadline} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-[14rem] flex-col gap-2">
+                            {(req.status === "requires_user_action" || req.method === "manual_link") &&
+                              req.removalUrl && (
+                                <a
+                                  href={req.removalUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-red-400 hover:text-red-300 underline text-xs"
+                                >
+                                  {isManualFallback(req)
+                                    ? "Open broker opt-out page →"
+                                    : "Open opt-out link →"}
+                                </a>
+                              )}
+                            {isManualFallback(req) ? (
+                              <p className="text-xs text-orange-300">
+                                Next: open the broker page, complete their opt-out flow,
+                                and then check back here for any follow-up tasks.
+                              </p>
+                            ) : req.sentAt ? (
+                              <p className="text-xs text-gray-500">
+                                No action needed unless the broker asks for more information.
+                              </p>
+                            ) : req.method === "manual_link" ? (
+                              <p className="text-xs text-gray-500">
+                                Use the direct broker link to complete this opt-out.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-500">
+                                Delivery is being tracked automatically.
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            aria-expanded={isOpen}
+                            aria-controls={panelId}
+                            onClick={() => handleToggleTimeline(req.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 hover:bg-gray-800 text-xs font-medium text-gray-300 transition-colors"
+                          >
+                            <span>{isOpen ? "Hide" : "Show"} timeline</span>
+                            <span aria-hidden="true">{isOpen ? "▲" : "▼"}</span>
+                          </button>
+                        </td>
+                      </tr>
+
+                      {isOpen && (
+                        <tr key={`${req.id}-timeline`}>
+                          <td colSpan={8} className="px-0 py-0">
+                            <div
+                              id={panelId}
+                              className="border-t border-gray-800 bg-gray-950/60 px-6 py-5"
+                            >
+                              <h3 className="text-sm font-semibold text-gray-300 mb-4">
+                                Communication timeline — {req.broker.name}
+                              </h3>
+                              <TimelinePanel
+                                requestId={req.id}
+                                events={timelineData[req.id] ?? null}
+                                loading={timelineLoading === req.id}
+                                error={timelineError[req.id] ?? null}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -707,6 +823,157 @@ export default function DashboardPage() {
     </main>
   );
 }
+
+// ── Timeline panel ────────────────────────────────────────────────────────────
+
+function TimelinePanel({
+  events,
+  loading,
+  error,
+}: {
+  requestId: string;
+  events: TimelineEvent[] | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading timeline…</p>;
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-red-400">{error}</p>
+    );
+  }
+
+  if (!events || events.length === 0) {
+    return (
+      <p className="text-sm text-gray-500">
+        No communication events recorded yet beyond the initial submission.
+      </p>
+    );
+  }
+
+  return (
+    <ol className="relative border-l border-gray-700 space-y-0">
+      {events.map((event, index) => (
+        <li key={event.id} className="ml-4 pb-6 last:pb-0">
+          {/* Dot */}
+          <span
+            className={`absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full border-2 ${toneDotClass(event.tone)}`}
+            aria-hidden="true"
+          />
+
+          <div className="pl-2">
+            <p className="text-xs text-gray-500 mb-0.5">
+              {formatDateTime(event.occurredAt)}
+            </p>
+            <p className={`text-sm font-semibold ${toneTitleClass(event.tone)}`}>
+              {event.title}
+            </p>
+            <p className="text-sm text-gray-400 mt-0.5 leading-5">
+              {event.description}
+            </p>
+            <TimelineEventMeta event={event} />
+          </div>
+
+          {/* Spacer line connector hint for last item */}
+          {index === events.length - 1 && null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function TimelineEventMeta({ event }: { event: TimelineEvent }) {
+  const m = event.metadata;
+  if (!m) return null;
+
+  const chips: { label: string; value: string }[] = [];
+
+  if (m.classification && m.classification !== "unknown") {
+    const label = classificationLabel(m.classification);
+    const conf = m.classificationConfidence != null ? ` (${m.classificationConfidence}% confidence)` : "";
+    chips.push({ label: "Classification", value: `${label}${conf}` });
+  }
+  if (m.actionType) {
+    chips.push({ label: "Action type", value: m.actionType.replace(/_/g, " ") });
+  }
+  if (m.failureReason) {
+    chips.push({ label: "Failure", value: trimMessage(m.failureReason, 120) });
+  }
+  if (m.providerMessageId) {
+    chips.push({ label: "Provider ID", value: shortId(m.providerMessageId) });
+  }
+  if (m.actionUrl) {
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        <a
+          href={m.actionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-red-400 hover:text-red-300 underline"
+        >
+          Open required link →
+        </a>
+        {chips.map((chip) => (
+          <MetaChip key={chip.label} label={chip.label} value={chip.value} />
+        ))}
+      </div>
+    );
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {chips.map((chip) => (
+        <MetaChip key={chip.label} label={chip.label} value={chip.value} />
+      ))}
+    </div>
+  );
+}
+
+function MetaChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gray-700 bg-gray-900 px-2.5 py-0.5 text-xs text-gray-400">
+      <span className="text-gray-500">{label}:</span> {value}
+    </span>
+  );
+}
+
+function toneDotClass(tone: TimelineTone): string {
+  switch (tone) {
+    case "success": return "border-green-500 bg-green-900";
+    case "warning": return "border-orange-500 bg-orange-900";
+    case "danger": return "border-red-500 bg-red-900";
+    case "info": return "border-blue-500 bg-blue-900";
+    default: return "border-gray-600 bg-gray-800";
+  }
+}
+
+function toneTitleClass(tone: TimelineTone): string {
+  switch (tone) {
+    case "success": return "text-green-300";
+    case "warning": return "text-orange-300";
+    case "danger": return "text-red-300";
+    case "info": return "text-blue-300";
+    default: return "text-gray-200";
+  }
+}
+
+function classificationLabel(classification: string): string {
+  const map: Record<string, string> = {
+    completion: "Completed",
+    acknowledgment: "Acknowledged",
+    rejection: "Rejected",
+    needs_more_info: "Needs more info",
+    noise: "Auto-reply / noise",
+  };
+  return map[classification] ?? classification.replace(/_/g, " ");
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 function Card({
   label,
