@@ -64,6 +64,15 @@ export function decodeRemovalProfileSnapshot(
   };
 }
 
+export function getPrimaryRemovalEmail(
+  profile: Pick<RemovalProfileSnapshot, "emails">
+): string | null {
+  const email = profile.emails.find(
+    (value) => typeof value === "string" && value.trim().length > 0
+  );
+  return email ?? null;
+}
+
 function decodeLegacyField(value: unknown): unknown {
   if (typeof value !== "string") return value;
 

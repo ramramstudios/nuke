@@ -7,10 +7,15 @@
  */
 
 import { prisma } from "@/lib/db";
+import {
+  decodeRemovalProfileSnapshot,
+  getPrimaryRemovalEmail,
+} from "@/lib/removal/profile";
 
 export type TimelineEventType =
   | "submitted"
   | "email_sent"
+  | "watch_inbox"
   | "retry_sent"
   | "retry_failed"
   | "escalated"
@@ -43,6 +48,7 @@ export interface TimelineEvent {
     providerMessageId?: string;
     outboundMessageId?: string;
     retryStage?: number;
+    replyToAddress?: string;
     excerpt?: string;
   };
 }
@@ -62,6 +68,9 @@ export async function getRequestTimeline(
     },
     include: {
       broker: true,
+      deletionRequest: {
+        select: { payloadSnapshot: true },
+      },
       retryAttempts: { orderBy: { attemptedAt: "asc" } },
       inboundMessages: { orderBy: { receivedAt: "asc" } },
       tasks: { orderBy: { createdAt: "asc" } },
@@ -73,6 +82,7 @@ export async function getRequestTimeline(
   const events: TimelineEvent[] = [];
   const brokerName = request.broker.name;
   const method = request.method;
+  const replyToAddress = getReplyToAddress(request.deletionRequest.payloadSnapshot);
 
   // ── 1. Submission milestone ──────────────────────────────────────────────
   const submittedAt = request.submittedAt ?? request.createdAt;
@@ -101,6 +111,21 @@ export async function getRequestTimeline(
         outboundMessageId: request.outboundMessageId ?? undefined,
       },
     });
+
+    if (method === "email" && replyToAddress) {
+      events.push({
+        id: `${request.id}-watch_inbox`,
+        type: "watch_inbox",
+        occurredAt: request.sentAt.toISOString(),
+        title: "Monitor your personal inbox",
+        description: `${brokerName} may reply directly to ${replyToAddress} instead of back into NUKE. Watch for identity checks, confirmation links, or completion notices there.`,
+        tone: "warning",
+        metadata: {
+          brokerName,
+          replyToAddress,
+        },
+      });
+    }
   }
 
   // ── 3. Manual fallback switch ────────────────────────────────────────────
@@ -374,4 +399,12 @@ function shortInstructions(instructions: string, maxLength = 200): string {
   const trimmed = instructions.split("\n\nBroker message excerpt:")[0].trim();
   if (trimmed.length <= maxLength) return trimmed;
   return `${trimmed.slice(0, maxLength - 1)}…`;
+}
+
+function getReplyToAddress(payloadSnapshot: string): string | null {
+  try {
+    return getPrimaryRemovalEmail(decodeRemovalProfileSnapshot(payloadSnapshot));
+  } catch {
+    return null;
+  }
 }

@@ -34,7 +34,13 @@ interface RemovalRequest {
   lastError: string | null;
   providerMessageId: string | null;
   attemptCount: number;
-  broker: { name: string; domain: string; category: string };
+  replyToAddress: string | null;
+  broker: {
+    name: string;
+    domain: string;
+    category: string;
+    removalEndpoint?: string | null;
+  };
 }
 
 interface CustomReq {
@@ -362,6 +368,20 @@ export default function DashboardPage() {
   const deliveryIssueCount = requests.filter((req) => Boolean(req.lastError)).length;
   const manualFallbackRequests = requests.filter((req) => isManualFallback(req));
   const manualFallbackCount = manualFallbackRequests.length;
+  const inboxWatchRequests = requests.filter((req) => shouldMonitorPersonalInbox(req));
+  const inboxWatchAddresses = [
+    ...new Set(
+      inboxWatchRequests
+        .map((req) => req.replyToAddress)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+  const loginDiffersFromReplyInbox = Boolean(
+    user?.email &&
+      inboxWatchAddresses.some(
+        (address) => address.toLowerCase() !== user.email.toLowerCase()
+      )
+  );
 
   return (
     <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
@@ -573,6 +593,114 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {inboxWatchRequests.length > 0 && (
+        <section>
+          <div className="rounded-2xl border border-blue-900/60 bg-blue-950/30 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">
+                  Check Your Personal Inbox
+                </p>
+                <h2 className="mt-2 text-2xl font-bold text-white">
+                  Some broker replies may bypass NUKE
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-100/80">
+                  These broker emails were sent with your personal profile address as the
+                  reply target, so identity checks, confirmation links, and completion
+                  notices can arrive there instead of back inside the app.
+                </p>
+                {inboxWatchAddresses.length > 0 && (
+                  <p className="mt-3 text-sm leading-6 text-gray-200">
+                    Watch{" "}
+                    <span className="font-medium text-white">
+                      {inboxWatchAddresses.join(", ")}
+                    </span>{" "}
+                    for broker replies.
+                  </p>
+                )}
+                {loginDiffersFromReplyInbox && user?.email && (
+                  <p className="mt-2 text-xs leading-5 text-blue-200/80">
+                    Your NUKE login email is {user.email}, which is different from the
+                    inbox brokers may be using for follow-up.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-xl border border-blue-900/60 bg-black/20 px-4 py-3 text-sm text-blue-100">
+                {inboxWatchRequests.length} broker
+                {inboxWatchRequests.length === 1 ? "" : "s"} may reply outside the app
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {inboxWatchRequests.map((req) => {
+                const nextSteps = getPersonalInboxSteps(req);
+
+                return (
+                  <article
+                    key={`inbox-watch-${req.id}`}
+                    className="rounded-xl border border-blue-900/50 bg-black/20 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">
+                            {req.broker.name}
+                          </h3>
+                          <StatusBadge status={req.status} />
+                        </div>
+                        <p className="mt-1 text-sm text-blue-100/80">
+                          {req.sentAt
+                            ? `Broker email sent ${formatDateTime(req.sentAt)}.`
+                            : "Broker email delivery is in progress."}{" "}
+                          Replies may go to{" "}
+                          <span className="font-medium text-white">
+                            {req.replyToAddress}
+                          </span>
+                          .
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-blue-900/50 bg-blue-950/20 px-3 py-2 text-xs text-blue-100/90">
+                        Watch for mail from {getBrokerReplyHint(req)}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">
+                          Why This Matters
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-gray-200">
+                          If {req.broker.name} asks for identity verification or sends a
+                          confirmation link to your personal inbox, NUKE will not know
+                          about that action until you complete it or route the reply back
+                          into the app later.
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">
+                          What To Do Next
+                        </p>
+                        <ol className="mt-2 space-y-2 text-sm leading-6 text-gray-200">
+                          {nextSteps.map((step, index) => (
+                            <li key={`${req.id}-inbox-step-${index}`}>
+                              <span className="mr-2 font-semibold text-blue-300">
+                                {index + 1}.
+                              </span>
+                              {step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Action Required Tasks */}
       {tasks.length > 0 && (
         <section>
@@ -704,6 +832,11 @@ export default function DashboardPage() {
                               <p className="text-xs text-orange-300">
                                 Next: open the broker page, complete their opt-out flow,
                                 and then check back here for any follow-up tasks.
+                              </p>
+                            ) : shouldMonitorPersonalInbox(req) ? (
+                              <p className="text-xs text-blue-200">
+                                Watch {req.replyToAddress} for replies or verification
+                                steps from {getBrokerReplyHint(req)}.
                               </p>
                             ) : req.sentAt ? (
                               <p className="text-xs text-gray-500">
@@ -899,6 +1032,9 @@ function TimelineEventMeta({ event }: { event: TimelineEvent }) {
   if (m.actionType) {
     chips.push({ label: "Action type", value: m.actionType.replace(/_/g, " ") });
   }
+  if (m.replyToAddress) {
+    chips.push({ label: "Reply inbox", value: m.replyToAddress });
+  }
   if (m.failureReason) {
     chips.push({ label: "Failure", value: trimMessage(m.failureReason, 120) });
   }
@@ -1000,6 +1136,15 @@ function isManualFallback(req: RemovalRequest) {
   return req.method === "manual_link" && Boolean(req.lastError);
 }
 
+function shouldMonitorPersonalInbox(req: RemovalRequest) {
+  return (
+    req.method === "email" &&
+    Boolean(req.sentAt) &&
+    Boolean(req.replyToAddress) &&
+    !["completed", "rejected"].includes(req.status)
+  );
+}
+
 function getManualFallbackSummary(req: RemovalRequest) {
   const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
   if (attemptedAt) {
@@ -1035,6 +1180,16 @@ function getManualFallbackSteps(req: RemovalRequest) {
     "Refresh the dashboard to see whether the fallback link is available.",
     "Once the broker link appears, complete the broker's own opt-out flow directly.",
     "Check back here afterward for any new follow-up tasks.",
+  ];
+}
+
+function getPersonalInboxSteps(req: RemovalRequest) {
+  return [
+    `Check ${req.replyToAddress} and its spam folder for messages from ${getBrokerReplyHint(
+      req
+    )}.`,
+    "Complete any identity check, confirmation link, or reply step the broker requests.",
+    "Return to this dashboard afterward so you can track any status changes or follow-up tasks.",
   ];
 }
 
@@ -1124,4 +1279,23 @@ function trimMessage(value: string, maxLength = 160) {
 function shortId(value: string, maxLength = 20) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, 8)}…${value.slice(-8)}`;
+}
+
+function getBrokerReplyHint(req: RemovalRequest) {
+  const endpoint = req.broker.removalEndpoint?.trim();
+  if (!endpoint) {
+    return req.broker.domain;
+  }
+
+  if (!endpoint.includes("@")) {
+    return req.broker.domain;
+  }
+
+  const endpointDomain = endpoint.split("@")[1]?.toLowerCase();
+  const brokerDomain = req.broker.domain.toLowerCase();
+  if (!endpointDomain || endpointDomain === brokerDomain) {
+    return endpoint;
+  }
+
+  return `${endpoint} or ${req.broker.domain}`;
 }

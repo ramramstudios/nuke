@@ -6,6 +6,10 @@
  */
 
 import { prisma } from "@/lib/db";
+import {
+  decodeRemovalProfileSnapshot,
+  getPrimaryRemovalEmail,
+} from "@/lib/removal/profile";
 
 export interface ComplianceSummary {
   total: number;
@@ -138,9 +142,27 @@ export async function simulateBrokerResponses(): Promise<{
  * Get detailed request statuses for a user, grouped by broker.
  */
 export async function getDetailedStatus(userId: string) {
-  return prisma.removalRequest.findMany({
+  const requests = await prisma.removalRequest.findMany({
     where: { deletionRequest: { userId } },
-    include: { broker: true },
+    include: {
+      broker: true,
+      deletionRequest: {
+        select: { payloadSnapshot: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
+
+  return requests.map(({ deletionRequest, ...req }) => ({
+    ...req,
+    replyToAddress: getReplyToAddress(deletionRequest.payloadSnapshot),
+  }));
+}
+
+function getReplyToAddress(payloadSnapshot: string): string | null {
+  try {
+    return getPrimaryRemovalEmail(decodeRemovalProfileSnapshot(payloadSnapshot));
+  } catch {
+    return null;
+  }
 }
