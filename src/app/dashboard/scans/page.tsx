@@ -198,6 +198,12 @@ export default function ScanResultsPage() {
           >
             Back to Dashboard
           </Link>
+          <Link
+            href="/dashboard/profile"
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
+          >
+            Edit Profile
+          </Link>
           <button
             onClick={handleRunScan}
             disabled={!!actionLoading}

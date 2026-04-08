@@ -35,18 +35,7 @@ interface LegacySnapshotShape {
 }
 
 export function createRemovalProfileSnapshot(profile: StoredProfileLike): string {
-  const snapshot: RemovalProfileSnapshot = {
-    fullNames: decryptJSON<string[]>(profile.fullNames),
-    emails: decryptJSON<string[]>(profile.emails),
-    phones: decryptJSON<string[]>(profile.phones),
-    addresses: decryptJSON<RemovalAddress[]>(profile.addresses),
-    advertisingIds: profile.advertisingIds
-      ? decryptJSON<string[]>(profile.advertisingIds)
-      : [],
-    vin: profile.vin ? decryptJSON<string>(profile.vin) : null,
-  };
-
-  return encryptJSON(snapshot);
+  return encryptJSON(decodeStoredProfile(profile));
 }
 
 export function decodeRemovalProfileSnapshot(
@@ -71,6 +60,21 @@ export function getPrimaryRemovalEmail(
     (value) => typeof value === "string" && value.trim().length > 0
   );
   return email ?? null;
+}
+
+export function decodeStoredProfile(
+  profile: StoredProfileLike
+): RemovalProfileSnapshot {
+  return {
+    fullNames: decryptJSON<string[]>(profile.fullNames),
+    emails: decryptJSON<string[]>(profile.emails),
+    phones: decryptJSON<string[]>(profile.phones),
+    addresses: decryptJSON<RemovalAddress[]>(profile.addresses),
+    advertisingIds: profile.advertisingIds
+      ? decryptJSON<string[]>(profile.advertisingIds)
+      : [],
+    vin: profile.vin ? decryptJSON<string>(profile.vin) : null,
+  };
 }
 
 function decodeLegacyField(value: unknown): unknown {
