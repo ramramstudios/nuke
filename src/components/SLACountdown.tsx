@@ -1,7 +1,7 @@
 "use client";
 
 export function SLACountdown({ deadline }: { deadline: string | null }) {
-  if (!deadline) return <span className="text-gray-600">—</span>;
+  if (!deadline) return <span style={{ color: "var(--text-faint)" }}>—</span>;
 
   const target = new Date(deadline);
   const now = new Date();
@@ -10,7 +10,7 @@ export function SLACountdown({ deadline }: { deadline: string | null }) {
 
   if (diffDays < 0) {
     return (
-      <span className="text-red-400 font-medium">
+      <span className="font-medium" style={{ color: "rgb(248,113,113)" }}>
         {Math.abs(diffDays)}d overdue
       </span>
     );
@@ -18,10 +18,10 @@ export function SLACountdown({ deadline }: { deadline: string | null }) {
 
   const color =
     diffDays <= 7
-      ? "text-red-400"
+      ? "rgb(248,113,113)"
       : diffDays <= 14
-        ? "text-yellow-400"
-        : "text-gray-400";
+        ? "rgb(251,191,36)"
+        : "var(--text-muted)";
 
-  return <span className={color}>{diffDays}d remaining</span>;
+  return <span style={{ color }}>{diffDays}d remaining</span>;
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Banner, LoadingScreen, PageContent, PageHeader } from "@/components/ui";
 import {
   getResponseErrorMessage,
   parseJsonResponse,
@@ -17,7 +17,6 @@ interface SessionUser {
 
 export default function ManagedServicePage() {
   const router = useRouter();
-  const [user, setUser] = useState<SessionUser | null>(null);
   const [data, setData] = useState<ManagedServiceDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,7 +73,6 @@ export default function ManagedServicePage() {
       }
 
       if (!managedRes.ok || !managedPayload.data) {
-        setUser(mePayload.data);
         setFeedback({
           tone: "error",
           text: getResponseErrorMessage(
@@ -86,7 +84,6 @@ export default function ManagedServicePage() {
         return;
       }
 
-      setUser(mePayload.data);
       setData(managedPayload.data);
       setFeedback(null);
       setLoading(false);
@@ -188,91 +185,35 @@ export default function ManagedServicePage() {
     });
   }
 
-  async function handleLogout() {
-    setActionLoading("logout");
-    await fetch("/api/auth/logout", { method: "POST" });
-    setActionLoading("");
-    router.push("/onboarding");
-  }
-
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-gray-500">Loading concierge pilot…</p>
-      </main>
-    );
+    return <LoadingScreen message="Loading concierge pilot…" />;
   }
 
   const packageInfo = data?.package ?? null;
   const enrollment = data?.enrollment ?? null;
 
   return (
-    <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-10 space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Managed-Service Pilot</h1>
-          <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
-          <p className="text-gray-500 text-sm mt-2 max-w-3xl">
-            Human-supported submission review and follow-up handling for the current
-            pilot cohort. This package is intentionally manual-invoice while Stripe
-            remains a later milestone.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
-          <Link
-            href="/dashboard/scans"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            View Scan Results
-          </Link>
-          <Link
-            href="/dashboard/review"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Review Queue
-          </Link>
-          <Link
-            href="/dashboard/metrics"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Metrics
-          </Link>
-          <button
-            onClick={handleRefresh}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium text-gray-100 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "refresh" ? "Refreshing…" : "Refresh"}
-          </button>
-          <button
-            onClick={handleLogout}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "logout" ? "Signing out…" : "Sign out"}
-          </button>
-        </div>
-      </div>
+      <PageContent wide>
+        <PageHeader
+          title="Managed-Service Pilot"
+          subtitle="Human-supported submission review and follow-up handling for the current pilot cohort. This package is intentionally manual-invoice while Stripe remains a later milestone."
+          actions={
+            <button
+              onClick={handleRefresh}
+              disabled={!!actionLoading}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors border"
+              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+            >
+              {actionLoading === "refresh" ? "Refreshing…" : "Refresh"}
+            </button>
+          }
+        />
 
-      {feedback && (
-        <div
-          className={`rounded-xl px-4 py-3 text-sm ${
-            feedback.tone === "error"
-              ? "border border-red-800 bg-red-950/30 text-red-300"
-              : feedback.tone === "success"
-                ? "border border-emerald-800 bg-emerald-950/30 text-emerald-200"
-                : "border border-blue-800 bg-blue-950/30 text-blue-200"
-          }`}
-        >
-          {feedback.text}
-        </div>
-      )}
+        {feedback && (
+          <Banner tone={feedback.tone === "success" ? "success" : feedback.tone === "error" ? "error" : "info"}>
+            {feedback.text}
+          </Banner>
+        )}
 
       {packageInfo && data && (
         <>
@@ -303,9 +244,9 @@ export default function ManagedServicePage() {
 
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <section className="space-y-6">
-              <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-5">
-                <h2 className="text-xl font-semibold text-white">{packageInfo.name}</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-300">
+              <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+                <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>{packageInfo.name}</h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                   {packageInfo.supportWorkflowSummary}
                 </p>
 
@@ -323,16 +264,16 @@ export default function ManagedServicePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-5">
+              <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-semibold text-white">Support Workflow</h2>
-                    <p className="mt-1 text-sm text-gray-400">
+                    <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Support Workflow</h2>
+                    <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
                       Defined handoff steps for the pilot cohort, with manual billing
                       and dashboard-visible status updates.
                     </p>
                   </div>
-                  <div className="rounded-xl border border-gray-800 bg-black/20 px-3 py-2 text-sm text-gray-300">
+                  <div className="rounded-xl border px-3 py-2 text-sm" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)", color: "var(--text-2)" }}>
                     {packageInfo.supportHours}
                   </div>
                 </div>
@@ -351,9 +292,9 @@ export default function ManagedServicePage() {
             </section>
 
             <section className="space-y-6">
-              <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-5">
-                <h2 className="text-xl font-semibold text-white">Turnaround Expectations</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-300">
+              <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+                <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Turnaround Expectations</h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                   {packageInfo.turnaroundSummary}
                 </p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -373,9 +314,9 @@ export default function ManagedServicePage() {
                   onCancel={() => handleEnrollmentAction("cancel")}
                 />
               ) : (
-                <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-5">
-                  <h2 className="text-xl font-semibold text-white">Reserve a Pilot Spot</h2>
-                  <p className="mt-2 text-sm leading-6 text-gray-300">
+                <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+                  <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Reserve a Pilot Spot</h2>
+                  <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                     Reserve a seat now and we’ll use your current account workload to
                     scope kickoff. Payment is manual for this pilot, and the dashboard
                     will track the next support checkpoint after you reserve.
@@ -383,17 +324,12 @@ export default function ManagedServicePage() {
 
                   <div className="mt-5 space-y-4">
                     <label className="block">
-                      <span className="text-sm font-medium text-gray-200">
-                        Preferred contact channel
-                      </span>
+                      <span className="text-sm font-medium" style={{ color: "var(--text-2)" }}>Preferred contact channel</span>
                       <select
                         value={contactPreference}
-                        onChange={(event) =>
-                          setContactPreference(
-                            event.target.value as "email" | "dashboard"
-                          )
-                        }
-                        className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                        onChange={(event) => setContactPreference(event.target.value as "email" | "dashboard")}
+                        className="mt-2 w-full rounded-xl px-4 py-3 text-sm outline-none"
+                        style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
                       >
                         <option value="email">Email first</option>
                         <option value="dashboard">Dashboard first</option>
@@ -401,13 +337,12 @@ export default function ManagedServicePage() {
                     </label>
 
                     <label className="block">
-                      <span className="text-sm font-medium text-gray-200">
-                        Preferred kickoff window
-                      </span>
+                      <span className="text-sm font-medium" style={{ color: "var(--text-2)" }}>Preferred kickoff window</span>
                       <select
                         value={preferredStartWindow}
                         onChange={(event) => setPreferredStartWindow(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                        className="mt-2 w-full rounded-xl px-4 py-3 text-sm outline-none"
+                        style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
                       >
                         <option>This week</option>
                         <option>Next week</option>
@@ -417,15 +352,14 @@ export default function ManagedServicePage() {
                     </label>
 
                     <label className="block">
-                      <span className="text-sm font-medium text-gray-200">
-                        Concierge notes
-                      </span>
+                      <span className="text-sm font-medium" style={{ color: "var(--text-2)" }}>Concierge notes</span>
                       <textarea
                         value={notes}
                         onChange={(event) => setNotes(event.target.value)}
                         rows={5}
                         placeholder="Priority brokers, travel dates, identity-verification concerns, or anything else the concierge team should know."
-                        className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                        className="mt-2 w-full rounded-xl px-4 py-3 text-sm outline-none"
+                        style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
                       />
                     </label>
 
@@ -449,7 +383,8 @@ export default function ManagedServicePage() {
                       type="button"
                       onClick={handleReserveSpot}
                       disabled={saving || data.seatsRemaining === 0}
-                      className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                      className="w-full rounded-xl px-4 py-3 text-sm font-medium text-white transition disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
                     >
                       {saving
                         ? "Reserving your pilot spot…"
@@ -463,8 +398,8 @@ export default function ManagedServicePage() {
             </section>
           </div>
         </>
-      )}
-    </main>
+        )}
+      </PageContent>
   );
 }
 
@@ -479,95 +414,62 @@ function MetricCard({
   detail: string;
   tone?: "neutral" | "warning";
 }) {
+  const style = tone === "warning"
+    ? { borderColor: "rgba(146,64,14,0.5)", background: "rgba(120,53,15,0.15)" }
+    : { borderColor: "var(--border)", background: "var(--surface)" };
   return (
-    <div
-      className={`rounded-2xl border p-5 ${
-        tone === "warning"
-          ? "border-orange-900/60 bg-orange-950/20"
-          : "border-gray-800 bg-gray-950/40"
-      }`}
-    >
-      <p className="text-sm uppercase tracking-[0.18em] text-gray-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-3 text-sm leading-6 text-gray-400">{detail}</p>
+    <div className="rounded-2xl border p-5" style={style}>
+      <p className="text-sm uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>{label}</p>
+      <p className="mt-3 text-3xl font-semibold" style={{ color: "var(--text)" }}>{value}</p>
+      <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{detail}</p>
     </div>
   );
 }
 
-function InfoPanel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function InfoPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
-      <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-400">
-        {title}
-      </h3>
+    <div className="rounded-xl border p-4" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+      <h3 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>{title}</h3>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
 }
 
 function ListRow({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm leading-6 text-gray-300">{children}</p>;
+  return <p className="text-sm leading-6" style={{ color: "var(--text-2)" }}>{children}</p>;
 }
 
-function WorkflowStep({
-  index,
-  title,
-  description,
-}: {
-  index: number;
-  title: string;
-  description: string;
-}) {
+function WorkflowStep({ index, title, description }: { index: number; title: string; description: string }) {
   return (
-    <div className="flex gap-4 rounded-xl border border-gray-800 bg-black/20 p-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-red-800 bg-red-950/40 text-sm font-semibold text-red-200">
+    <div className="flex gap-4 rounded-xl border p-4" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ borderColor: "rgba(153,27,27,0.6)", background: "rgba(127,29,29,0.3)", color: "#fca5a5" }}>
         {index}
       </div>
       <div>
-        <h3 className="text-base font-semibold text-white">{title}</h3>
-        <p className="mt-1 text-sm leading-6 text-gray-300">{description}</p>
+        <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>{title}</h3>
+        <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-2)" }}>{description}</p>
       </div>
     </div>
   );
 }
 
-function MetricPill({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function MetricPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-gray-800 bg-black/20 px-3 py-2">
-      <p className="text-xs uppercase tracking-[0.16em] text-gray-500">{label}</p>
-      <p className="mt-1 text-sm text-gray-100">{value}</p>
+    <div className="rounded-lg border px-3 py-2" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+      <p className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-faint)" }}>{label}</p>
+      <p className="mt-1 text-sm" style={{ color: "var(--text)" }}>{value}</p>
     </div>
   );
 }
 
-function ChecklistItem({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label: string;
-}) {
+function ChecklistItem({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
   return (
-    <label className="flex items-start gap-3 rounded-xl border border-gray-800 bg-black/20 px-4 py-3 text-sm text-gray-300">
+    <label className="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm cursor-pointer" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)", color: "var(--text-2)" }}>
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-900 text-red-500 focus:ring-red-500/30"
+        className="mt-1 h-4 w-4 rounded"
       />
       <span className="leading-6">{label}</span>
     </label>
@@ -599,11 +501,11 @@ function EnrollmentCard({
     enrollment.status !== "canceled" && enrollment.status !== "completed";
 
   return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-5">
+    <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-white">Your Pilot Enrollment</h2>
-          <p className="mt-2 text-sm leading-6 text-gray-300">
+          <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>Your Pilot Enrollment</h2>
+          <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
             Track billing and support status here while the pilot is still operating
             with a manual invoice workflow.
           </p>
@@ -636,8 +538,8 @@ function EnrollmentCard({
         />
       </div>
 
-      <div className="mt-5 rounded-xl border border-gray-800 bg-black/20 p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-400">
+      <div className="mt-5 rounded-xl border p-4" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+        <h3 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>
           Enrollment Snapshot
         </h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -656,22 +558,22 @@ function EnrollmentCard({
           <ListRow>Contact preference: {enrollment.contactPreference}</ListRow>
         </div>
         {enrollment.notes && (
-          <p className="mt-4 text-sm leading-6 text-gray-300">
+          <p className="mt-4 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
             Concierge notes: {enrollment.notes}
           </p>
         )}
       </div>
 
-      <div className="mt-5 rounded-xl border border-sky-900/50 bg-sky-950/20 p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-200">
+      <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "rgba(14,116,144,0.5)", background: "rgba(8,51,68,0.3)" }}>
+        <h3 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "#67e8f9" }}>
           Current Support Note
         </h3>
-        <p className="mt-2 text-sm leading-6 text-sky-100/90">
+        <p className="mt-2 text-sm leading-6" style={{ color: "#cffafe" }}>
           {enrollment.latestOperatorNote ??
             "No operator note has been posted yet. The dashboard will show the next support checkpoint here."}
         </p>
         {enrollment.paymentSubmittedAt && (
-          <p className="mt-3 text-xs text-sky-200/80">
+          <p className="mt-3 text-xs" style={{ color: "#a5f3fc" }}>
             Payment marked sent {formatDateTime(enrollment.paymentSubmittedAt)}.
           </p>
         )}
@@ -682,19 +584,17 @@ function EnrollmentCard({
           type="button"
           onClick={onMarkPaymentSent}
           disabled={!canMarkPaymentSent || !!actionLoading}
-          className="rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          className="rounded-xl px-4 py-3 text-sm font-medium text-white transition disabled:opacity-50"
+          style={{ background: "var(--accent)" }}
         >
-          {actionLoading === "mark_payment_sent"
-            ? "Recording payment…"
-            : canMarkPaymentSent
-              ? "I’ve sent payment"
-              : "Payment already recorded"}
+          {actionLoading === "mark_payment_sent" ? "Recording payment…" : canMarkPaymentSent ? "I’ve sent payment" : "Payment already recorded"}
         </button>
         <button
           type="button"
           onClick={onCancel}
           disabled={!canCancel || !!actionLoading}
-          className="rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-xl border px-4 py-3 text-sm font-medium transition disabled:opacity-50"
+          style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
         >
           {actionLoading === "cancel" ? "Canceling…" : "Cancel pilot request"}
         </button>

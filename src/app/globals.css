@@ -1,41 +1,85 @@
 @import "tailwindcss";
 
+/* ─── Design tokens: dark (default) ─────────────────────────────────────── */
 :root {
-  --background: #030712;
-  --foreground: #f3f4f6;
-  --accent: #ef4444;
-  --accent-dim: #991b1b;
-  --surface: #111827;
-  --border: #1f2937;
+  --bg:          #030712;
+  --bg-subtle:   #0a0f1a;
+  --surface:     #111827;
+  --surface-2:   #1a2233;
+  --border:      #1f2937;
+  --border-2:    #374151;
+  --text:        #f3f4f6;
+  --text-2:      #d1d5db;
+  --text-muted:  #9ca3af;
+  --text-faint:  #6b7280;
+  --accent:      #ef4444;
+  --accent-hover:#dc2626;
+  --accent-dim:  #991b1b;
+  --nav-bg:      #0a0f1a;
+  --nav-border:  #1f2937;
+
+  /* Tailwind alias shims */
+  --background:  var(--bg);
+  --foreground:  var(--text);
 }
 
+/* ─── Design tokens: light ───────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #f9fafb;
+  --bg-subtle:   #f3f4f6;
+  --surface:     #ffffff;
+  --surface-2:   #f3f4f6;
+  --border:      #e5e7eb;
+  --border-2:    #d1d5db;
+  --text:        #111827;
+  --text-2:      #374151;
+  --text-muted:  #6b7280;
+  --text-faint:  #9ca3af;
+  --accent:      #dc2626;
+  --accent-hover:#b91c1c;
+  --accent-dim:  #fee2e2;
+  --nav-bg:      #ffffff;
+  --nav-border:  #e5e7eb;
+
+  --background:  var(--bg);
+  --foreground:  var(--text);
+}
+
+/* ─── Tailwind theme bridge ──────────────────────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-accent: var(--accent);
-  --color-accent-dim: var(--accent-dim);
-  --color-surface: var(--surface);
-  --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:  var(--background);
+  --color-foreground:  var(--foreground);
+  --color-accent:      var(--accent);
+  --color-accent-dim:  var(--accent-dim);
+  --color-surface:     var(--surface);
+  --color-border:      var(--border);
+  --font-sans:         var(--font-geist-sans);
+  --font-mono:         var(--font-geist-mono);
 }
 
+/* ─── Base ───────────────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-@keyframes auth-card-enter {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
+/* ─── Semantic utility classes ───────────────────────────────────────────── */
+.bg-page        { background: var(--bg); }
+.bg-subtle      { background: var(--bg-subtle); }
+.bg-surface     { background: var(--surface); }
+.bg-surface-2   { background: var(--surface-2); }
+.border-base    { border-color: var(--border); }
+.border-strong  { border-color: var(--border-2); }
+.text-base      { color: var(--text); }
+.text-secondary { color: var(--text-2); }
+.text-muted     { color: var(--text-muted); }
+.text-faint     { color: var(--text-faint); }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes auth-card-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .auth-enter {
@@ -43,7 +87,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-enter {
-    animation: none;
-  }
+  .auth-enter { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ─── Focus ring ─────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

@@ -1,29 +1,38 @@
-const colorMap: Record<string, string> = {
-  pending: "bg-yellow-900/50 text-yellow-300 border-yellow-800",
-  submitted: "bg-blue-900/50 text-blue-300 border-blue-800",
-  acknowledged: "bg-indigo-900/50 text-indigo-300 border-indigo-800",
-  completed: "bg-green-900/50 text-green-300 border-green-800",
-  rejected: "bg-red-900/50 text-red-300 border-red-800",
-  requires_user_action: "bg-orange-900/50 text-orange-300 border-orange-800",
-  pending_review: "bg-cyan-950/50 text-cyan-200 border-cyan-800",
-  awaiting_payment: "bg-amber-950/50 text-amber-200 border-amber-800",
-  queued: "bg-sky-950/50 text-sky-200 border-sky-800",
-  active: "bg-emerald-950/50 text-emerald-200 border-emerald-800",
-  invoice_pending: "bg-amber-950/50 text-amber-200 border-amber-800",
-  payment_submitted: "bg-sky-950/50 text-sky-200 border-sky-800",
-  paid: "bg-emerald-950/50 text-emerald-200 border-emerald-800",
-  refunded: "bg-zinc-800/70 text-zinc-200 border-zinc-700",
-  running: "bg-blue-900/50 text-blue-300 border-blue-800",
-  failed: "bg-red-900/50 text-red-300 border-red-800",
+type StatusStyle = { background: string; color: string; borderColor: string };
+
+const styleMap: Record<string, StatusStyle> = {
+  pending:             { background: "rgba(161,98,7,0.15)",   color: "rgb(253,224,71)",  borderColor: "rgba(161,98,7,0.4)" },
+  submitted:           { background: "rgba(29,78,216,0.15)",  color: "rgb(147,197,253)", borderColor: "rgba(29,78,216,0.4)" },
+  acknowledged:        { background: "rgba(67,56,202,0.15)",  color: "rgb(165,180,252)", borderColor: "rgba(67,56,202,0.4)" },
+  completed:           { background: "rgba(21,128,61,0.15)",  color: "rgb(134,239,172)", borderColor: "rgba(21,128,61,0.4)" },
+  rejected:            { background: "rgba(185,28,28,0.15)",  color: "rgb(252,165,165)", borderColor: "rgba(185,28,28,0.4)" },
+  requires_user_action:{ background: "rgba(194,65,12,0.15)",  color: "rgb(253,186,116)", borderColor: "rgba(194,65,12,0.4)" },
+  pending_review:      { background: "rgba(21,94,117,0.15)",  color: "rgb(165,243,252)", borderColor: "rgba(21,94,117,0.4)" },
+  awaiting_payment:    { background: "rgba(180,83,9,0.15)",   color: "rgb(252,211,77)",  borderColor: "rgba(180,83,9,0.4)" },
+  queued:              { background: "rgba(3,105,161,0.15)",  color: "rgb(186,230,253)", borderColor: "rgba(3,105,161,0.4)" },
+  active:              { background: "rgba(6,95,70,0.15)",    color: "rgb(110,231,183)", borderColor: "rgba(6,95,70,0.4)" },
+  invoice_pending:     { background: "rgba(180,83,9,0.15)",   color: "rgb(252,211,77)",  borderColor: "rgba(180,83,9,0.4)" },
+  payment_submitted:   { background: "rgba(3,105,161,0.15)",  color: "rgb(186,230,253)", borderColor: "rgba(3,105,161,0.4)" },
+  paid:                { background: "rgba(6,95,70,0.15)",    color: "rgb(110,231,183)", borderColor: "rgba(6,95,70,0.4)" },
+  refunded:            { background: "rgba(63,63,70,0.3)",    color: "rgb(212,212,216)", borderColor: "rgba(63,63,70,0.6)" },
+  running:             { background: "rgba(29,78,216,0.15)",  color: "rgb(147,197,253)", borderColor: "rgba(29,78,216,0.4)" },
+  failed:              { background: "rgba(185,28,28,0.15)",  color: "rgb(252,165,165)", borderColor: "rgba(185,28,28,0.4)" },
+};
+
+const fallbackStyle: StatusStyle = {
+  background: "rgba(82,82,91,0.3)",
+  color: "rgb(212,212,216)",
+  borderColor: "rgba(82,82,91,0.5)",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const classes = colorMap[status] ?? "bg-gray-800 text-gray-300 border-gray-700";
+  const s = styleMap[status] ?? fallbackStyle;
   const label = status.replace(/_/g, " ");
 
   return (
     <span
-      className={`inline-block px-2 py-0.5 text-xs font-medium rounded border ${classes}`}
+      className="inline-block px-2 py-0.5 text-xs font-medium rounded border"
+      style={{ background: s.background, color: s.color, borderColor: s.borderColor }}
     >
       {label}
     </span>

@@ -1,9 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  Banner,
+  EmptyState,
+  LoadingScreen,
+  PageContent,
+  PageHeader,
+  StatCard,
+} from "@/components/ui";
 import {
   getResponseErrorMessage,
   parseJsonResponse,
@@ -31,26 +38,15 @@ interface ScanRecord {
 }
 
 interface ScanPageData {
-  user: { email: string; hasProfile: boolean };
   scans: ScanRecord[];
 }
 
 export default function ScanResultsPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ email: string; hasProfile: boolean } | null>(
-    null
-  );
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
-
-  async function handleLogout() {
-    setActionLoading("logout");
-    await fetch("/api/auth/logout", { method: "POST" });
-    setActionLoading("");
-    router.push("/onboarding");
-  }
 
   async function fetchScanData(): Promise<ScanPageData | null> {
     const meRes = await fetch("/api/auth/me", { cache: "no-store" });
@@ -87,13 +83,11 @@ export default function ScanResultsPage() {
     }
 
     return {
-      user: me,
       scans: scansPayload.data,
     };
   }
 
   function applyScanData(data: ScanPageData) {
-    setUser(data.user);
     setScans(data.scans);
     setLoading(false);
   }
@@ -170,210 +164,140 @@ export default function ScanResultsPage() {
   const latestCompletedAt = scans[0]?.completedAt ?? scans[0]?.createdAt ?? null;
 
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-gray-500">Loading scan results…</p>
-      </main>
-    );
+    return <LoadingScreen message="Loading scan results…" />;
   }
 
   return (
-    <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">Scan Results</h1>
-            <StatusBadge status={scans[0]?.status ?? "pending"} />
-          </div>
-          <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
-          <p className="text-gray-500 text-sm mt-2">
-            Discovery is still simulated in this phase, but every run writes real
-            scan and exposure rows to the database.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
-          <Link
-            href="/dashboard/profile"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Edit Profile
-          </Link>
-          <Link
-            href="/dashboard/review"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Review Queue
-          </Link>
-          <Link
-            href="/dashboard/metrics"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Metrics
-          </Link>
-          <Link
-            href="/dashboard/managed-service"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Concierge Pilot
-          </Link>
-          <button
-            onClick={handleRunScan}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "scan" ? "Scanning…" : "Run Scan Again"}
-          </button>
-          <button
-            onClick={handleLogout}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "logout" ? "Signing out…" : "Sign out"}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <MetricCard label="Saved Scans" value={scans.length} />
-        <MetricCard label="Total Exposures" value={totalExposures} />
-        <MetricCard label="Latest Scan Hits" value={latestExposureCount} />
-        <MetricCard
-          label="Last Completed"
-          value={latestCompletedAt ? formatDate(latestCompletedAt) : "Never"}
-          compact
-        />
-      </div>
-
-      {scans.length === 0 ? (
-        <div className="text-center py-16 text-gray-500 border border-dashed border-gray-800 rounded-xl">
-          <p className="text-lg">No scans yet.</p>
-          <p className="text-sm mt-2">
-            Run your first scan to generate simulated broker exposure results.
-          </p>
-        </div>
-      ) : (
-        <section className="space-y-6">
-          {scans.map((scan) => (
-            <article
-              key={scan.id}
-              className="border border-gray-800 rounded-xl overflow-hidden"
+    <PageContent>
+        <PageHeader
+          title="Scan Results"
+          subtitle="Discovery is still simulated in this phase, but every run writes real scan and exposure rows to the database."
+          actions={
+            <button
+              onClick={handleRunScan}
+              disabled={!!actionLoading}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors text-white"
+              style={{ background: "var(--accent)" }}
             >
-              <div className="bg-gray-950/80 border-b border-gray-800 px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">
-                        Scan {formatDateTime(scan.createdAt)}
-                      </h2>
-                      <StatusBadge status={scan.status} />
+              {actionLoading === "scan" ? "Scanning…" : "Run Scan Again"}
+            </button>
+          }
+        />
+
+        {error && <Banner tone="error">{error}</Banner>}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard label="Saved Scans" value={scans.length} />
+          <StatCard label="Total Exposures" value={totalExposures} />
+          <StatCard label="Latest Scan Hits" value={latestExposureCount} />
+          <StatCard
+            label="Last Completed"
+            value={latestCompletedAt ? formatDate(latestCompletedAt) : "Never"}
+            compact
+          />
+        </div>
+
+        {scans.length === 0 ? (
+          <EmptyState
+            title="No scans yet."
+            body="Run your first scan to generate simulated broker exposure results."
+          />
+        ) : (
+          <section className="space-y-6">
+            {scans.map((scan) => (
+              <article
+                key={scan.id}
+                className="rounded-xl overflow-hidden border"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div
+                  className="px-5 py-4 border-b"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
+                          Scan {formatDateTime(scan.createdAt)}
+                        </h2>
+                        <StatusBadge status={scan.status} />
+                      </div>
+                      <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+                        {scan.exposures.length} exposure
+                        {scan.exposures.length === 1 ? "" : "s"} found
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-400 mt-1">
-                      {scan.exposures.length} exposure
-                      {scan.exposures.length === 1 ? "" : "s"} found
-                    </p>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {scan.completedAt
-                      ? `Completed ${formatDateTime(scan.completedAt)}`
-                      : scan.startedAt
-                        ? `Started ${formatDateTime(scan.startedAt)}`
-                        : "Pending"}
+                    <div className="text-sm" style={{ color: "var(--text-faint)" }}>
+                      {scan.completedAt
+                        ? `Completed ${formatDateTime(scan.completedAt)}`
+                        : scan.startedAt
+                          ? `Started ${formatDateTime(scan.startedAt)}`
+                          : "Pending"}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="p-5">
-                {scan.exposures.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No simulated exposures were found in this scan.
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {scan.exposures.map((exposure) => (
-                      <div
-                        key={exposure.id}
-                        className="rounded-lg border border-gray-800 bg-gray-950/60 p-4"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-medium">
-                              {exposure.broker?.name || "Unknown broker"}
-                            </h3>
-                            <p className="text-sm text-gray-400 mt-1">
-                              {(exposure.broker?.category || "other").replace(
-                                /_/g,
-                                " "
-                              )}{" "}
-                              · {exposure.broker?.domain || "unknown domain"}
-                            </p>
+                <div className="p-5">
+                  {scan.exposures.length === 0 ? (
+                    <p className="text-sm" style={{ color: "var(--text-faint)" }}>
+                      No simulated exposures were found in this scan.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {scan.exposures.map((exposure) => (
+                        <div
+                          key={exposure.id}
+                          className="rounded-lg border p-4"
+                          style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="font-medium" style={{ color: "var(--text)" }}>
+                                {exposure.broker?.name || "Unknown broker"}
+                              </h3>
+                              <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+                                {(exposure.broker?.category || "other").replace(/_/g, " ")}{" "}
+                                · {exposure.broker?.domain || "unknown domain"}
+                              </p>
+                            </div>
+                            <div className="text-xs" style={{ color: "var(--text-faint)" }}>
+                              Confidence {Math.round(exposure.confidence * 100)}%
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500">
-                            Confidence {Math.round(exposure.confidence * 100)}%
-                          </div>
-                        </div>
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {formatDetectedData(exposure.dataFound).map((item) => (
-                            <span
-                              key={`${exposure.id}-${item}`}
-                              className="inline-flex rounded-full border border-gray-700 bg-gray-900 px-2.5 py-1 text-xs text-gray-300"
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {formatDetectedData(exposure.dataFound).map((item) => (
+                              <span
+                                key={`${exposure.id}-${item}`}
+                                className="inline-flex rounded-full px-2.5 py-1 text-xs border"
+                                style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+                              >
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="mt-4">
+                            <a
+                              href={exposure.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm underline"
+                              style={{ color: "var(--accent)" }}
                             >
-                              {item}
-                            </span>
-                          ))}
+                              Open simulated source →
+                            </a>
+                          </div>
                         </div>
-
-                        <div className="mt-4">
-                          <a
-                            href={exposure.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-red-400 hover:text-red-300 underline"
-                          >
-                            Open simulated source →
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
-    </main>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  compact = false,
-}: {
-  label: string;
-  value: number | string;
-  compact?: boolean;
-}) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <div className={compact ? "text-sm font-semibold text-white" : "text-2xl font-bold text-white"}>
-        {value}
-      </div>
-      <div className="text-xs text-gray-400 mt-1">{label}</div>
-    </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+      </PageContent>
   );
 }
 

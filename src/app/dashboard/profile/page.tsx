@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
+import { Banner, LoadingScreen, PageContent, PageHeader } from "@/components/ui";
 import {
   getResponseErrorMessage,
   parseJsonResponse,
@@ -80,7 +81,6 @@ export default function ProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [actionLoading, setActionLoading] = useState("");
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
   const [profileUpdatedAt, setProfileUpdatedAt] = useState<string | null>(null);
@@ -209,13 +209,6 @@ export default function ProfilePage() {
   const showAddressError =
     touched.street || touched.city || touched.state || touched.zip || saving;
 
-  async function handleLogout() {
-    setActionLoading("logout");
-    await fetch("/api/auth/logout", { method: "POST" });
-    setActionLoading("");
-    router.push("/onboarding");
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setFeedback(null);
@@ -282,76 +275,21 @@ export default function ProfilePage() {
   }
 
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-gray-500">Loading profile…</p>
-      </main>
-    );
+    return <LoadingScreen message="Loading profile…" />;
   }
 
   return (
-    <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-10 space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Profile</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Review and edit the personal details NUKE uses for future broker requests.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
-          <Link
-            href="/dashboard/scans"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            View Scan Results
-          </Link>
-          <Link
-            href="/dashboard/review"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Review Queue
-          </Link>
-          <Link
-            href="/dashboard/metrics"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Metrics
-          </Link>
-          <Link
-            href="/dashboard/managed-service"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Concierge Pilot
-          </Link>
-          <button
-            onClick={handleLogout}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "logout" ? "Signing out…" : "Sign out"}
-          </button>
-        </div>
-      </div>
+    <PageContent>
+        <PageHeader
+          title="Profile"
+          subtitle="Review and edit the personal details NUKE uses for future broker requests."
+        />
 
-      {feedback && (
-        <div
-          className={`rounded-xl px-4 py-3 text-sm ${
-            feedback.tone === "error"
-              ? "border border-red-800 bg-red-950/30 text-red-300"
-              : feedback.tone === "success"
-                ? "border border-emerald-800 bg-emerald-950/30 text-emerald-200"
-                : "border border-blue-800 bg-blue-950/30 text-blue-200"
-          }`}
-        >
-          {feedback.text}
-        </div>
-      )}
+        {feedback && (
+          <Banner tone={feedback.tone === "success" ? "success" : feedback.tone === "error" ? "error" : "info"}>
+            {feedback.text}
+          </Banner>
+        )}
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <InfoCard
@@ -363,7 +301,7 @@ export default function ProfilePage() {
             label="Primary broker reply-to"
             value={emails[0] ?? "Add at least one profile email below"}
           />
-          <p className="text-sm leading-6 text-slate-400">
+          <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>
             The first email listed in your profile is used as the reply-to address for
             broker emails today. If brokers answer there, NUKE may not see the reply
             unless it reaches the app’s inbound pipeline.
@@ -374,7 +312,7 @@ export default function ProfilePage() {
           title="Snapshot Rules"
           description="Profile edits do not rewrite messages or forms that brokers already received."
         >
-          <p className="text-sm leading-6 text-slate-300">
+          <p className="text-sm leading-6" style={{ color: "var(--text-2)" }}>
             {lastSubmittedAt
               ? `Your most recent broker submission used a saved profile snapshot from ${formatDateTime(
                   lastSubmittedAt
@@ -382,7 +320,7 @@ export default function ProfilePage() {
               : "You have not submitted broker removals yet. Save your profile here and NUKE will use it the next time you submit removals."}
           </p>
           {profileUpdatedAt && (
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5" style={{ color: "var(--text-faint)" }}>
               Last profile save: {formatDateTime(profileUpdatedAt)}
             </p>
           )}
@@ -529,34 +467,39 @@ export default function ProfilePage() {
           />
         </FormSection>
 
-        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/8 px-4 py-3 text-sm leading-6 text-emerald-100">
+        <div
+          className="rounded-xl border px-4 py-3 text-sm leading-6"
+          style={{ borderColor: "rgba(6,95,70,0.4)", background: "rgba(6,78,59,0.12)", color: "#6ee7b7" }}
+        >
           Your profile details are encrypted before they are stored. Editing them here
           updates future broker requests, not requests that have already been sent.
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm leading-6 text-slate-400">
+          <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>
             After saving, return to the dashboard when you’re ready to submit another
             broker removal batch with the updated profile snapshot.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
               href="/dashboard"
-              className="inline-flex items-center justify-center rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-800"
+              className="inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors"
+              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
             >
               Back to dashboard
             </Link>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center justify-center rounded-2xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_40px_rgba(239,68,68,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65"
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65"
+              style={{ background: "var(--accent)" }}
             >
               {saving ? "Saving profile…" : "Save profile"}
             </button>
           </div>
         </div>
       </form>
-    </main>
+      </PageContent>
   );
 }
 
@@ -570,9 +513,12 @@ function InfoCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-white/8 bg-slate-950/45 p-5">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+    <section
+      className="rounded-2xl border p-5"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
+      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
   );
@@ -580,11 +526,14 @@ function InfoCard({
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+    <div
+      className="rounded-xl border px-4 py-3"
+      style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}
+    >
+      <p className="text-xs font-medium uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>
         {label}
       </p>
-      <p className="mt-2 text-sm font-medium text-white break-all">{value}</p>
+      <p className="mt-2 text-sm font-medium break-all" style={{ color: "var(--text)" }}>{value}</p>
     </div>
   );
 }
@@ -599,10 +548,13 @@ function FormSection({
   title: string;
 }) {
   return (
-    <section className="space-y-4 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-4 sm:p-5">
+    <section
+      className="space-y-4 rounded-2xl border p-4 sm:p-5"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
       <div>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+        <h2 className="text-base font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
+        <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p>
       </div>
       {children}
     </section>
@@ -631,11 +583,11 @@ function ProfileField({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-white">
+        <label htmlFor={id} className="text-sm font-medium" style={{ color: "var(--text)" }}>
           {label}
         </label>
         {inputProps.required && (
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+          <span className="text-xs font-medium uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>
             Required
           </span>
         )}
@@ -646,26 +598,21 @@ function ProfileField({
           id={id}
           aria-describedby={describedBy || undefined}
           aria-invalid={Boolean(error)}
-          className={`w-full rounded-2xl border bg-slate-950/90 px-4 py-3.5 text-base text-white placeholder:text-slate-500 transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
-            trailing ? "pr-20" : ""
-          } ${
-            error
-              ? "border-red-400/60 shadow-[0_0_0_1px_rgba(248,113,113,0.2)]"
-              : "border-white/10 hover:border-white/20 focus:border-red-400/60"
-          }`}
+          className={`w-full rounded-2xl px-4 py-3.5 text-base transition-all duration-200 ${trailing ? "pr-20" : ""}`}
+          style={{
+            background: "var(--bg-subtle)",
+            border: `1px solid ${error ? "rgba(248,113,113,0.6)" : "var(--border)"}`,
+            color: "var(--text)",
+          }}
         />
         {trailing && (
           <div className="absolute inset-y-0 right-2 flex items-center">{trailing}</div>
         )}
       </div>
       {error ? (
-        <p id={errorId} className="text-sm leading-6 text-red-200">
-          {error}
-        </p>
+        <p id={errorId} className="text-sm leading-6 text-red-400">{error}</p>
       ) : helperText ? (
-        <p id={hintId} className="text-sm leading-6 text-slate-500">
-          {helperText}
-        </p>
+        <p id={hintId} className="text-sm leading-6" style={{ color: "var(--text-faint)" }}>{helperText}</p>
       ) : null}
     </div>
   );
@@ -691,11 +638,11 @@ function ProfileTextarea({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-white">
+        <label htmlFor={id} className="text-sm font-medium" style={{ color: "var(--text)" }}>
           {label}
         </label>
         {textareaProps.required && (
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+          <span className="text-xs font-medium uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>
             Required
           </span>
         )}
@@ -705,20 +652,17 @@ function ProfileTextarea({
         id={id}
         aria-describedby={describedBy || undefined}
         aria-invalid={Boolean(error)}
-        className={`w-full rounded-2xl border bg-slate-950/90 px-4 py-3.5 text-base text-white placeholder:text-slate-500 transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
-          error
-            ? "border-red-400/60 shadow-[0_0_0_1px_rgba(248,113,113,0.2)]"
-            : "border-white/10 hover:border-white/20 focus:border-red-400/60"
-        }`}
+        className="w-full rounded-2xl px-4 py-3.5 text-base transition-all duration-200"
+        style={{
+          background: "var(--bg-subtle)",
+          border: `1px solid ${error ? "rgba(248,113,113,0.6)" : "var(--border)"}`,
+          color: "var(--text)",
+        }}
       />
       {error ? (
-        <p id={errorId} className="text-sm leading-6 text-red-200">
-          {error}
-        </p>
+        <p id={errorId} className="text-sm leading-6 text-red-400">{error}</p>
       ) : helperText ? (
-        <p id={hintId} className="text-sm leading-6 text-slate-500">
-          {helperText}
-        </p>
+        <p id={hintId} className="text-sm leading-6" style={{ color: "var(--text-faint)" }}>{helperText}</p>
       ) : null}
     </div>
   );

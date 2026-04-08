@@ -1,10 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SLACountdown } from "@/components/SLACountdown";
+import {
+  Banner,
+  LoadingScreen,
+  PageContent,
+  PageHeader,
+  StatCard,
+} from "@/components/ui";
 import {
   getResponseErrorMessage,
   parseJsonResponse,
@@ -288,13 +294,6 @@ export default function DashboardPage() {
     await refreshDashboard();
   }
 
-  async function handleLogout() {
-    setActionLoading("logout");
-    await fetch("/api/auth/logout", { method: "POST" });
-    setActionLoading("");
-    router.push("/onboarding");
-  }
-
   async function handleToggleTimeline(requestId: string) {
     // Collapse if already open
     if (openTimeline === requestId) {
@@ -353,11 +352,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-gray-500">Loading…</p>
-      </main>
-    );
+    return <LoadingScreen message="Loading…" />;
   }
 
   const latestSubmittedAt = requests
@@ -384,30 +379,36 @@ export default function DashboardPage() {
   );
 
   return (
-    <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 space-y-8">
+      <PageContent>
       {showResubmitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
-          <div className="w-full max-w-lg rounded-2xl border border-orange-900/60 bg-gray-950 p-6 shadow-2xl">
+          <div
+            className="w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+            style={{
+              borderColor: "rgba(146,64,14,0.55)",
+              background: "var(--surface)",
+            }}
+          >
             <div className="space-y-4">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-400">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#fb923c" }}>
                   Resubmit Warning
                 </p>
-                <h2 className="mt-2 text-2xl font-bold text-white">
+                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
                   A removal request was already sent
                 </h2>
               </div>
 
-              <p className="text-sm leading-6 text-gray-300">
+              <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>
                 We already have a pending removal workflow that was submitted at{" "}
-                <span className="font-medium text-white">
+                <span className="font-medium" style={{ color: "var(--text)" }}>
                   {formatDateTime(latestSubmittedAt)}
                 </span>
                 . Sending another batch right now is not advised because it can
                 spam brokers and make the results less effective.
               </p>
 
-              <p className="text-sm leading-6 text-gray-400">
+              <p className="text-sm leading-6" style={{ color: "var(--text-faint)" }}>
                 In the future we plan to block repeat submissions entirely for
                 active requests. If you still want to force another round, you
                 can continue below.
@@ -418,7 +419,12 @@ export default function DashboardPage() {
                   type="button"
                   onClick={() => setShowResubmitConfirm(false)}
                   disabled={!!actionLoading}
-                  className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "var(--bg-subtle)",
+                    color: "var(--text-muted)",
+                  }}
                 >
                   Cancel
                 </button>
@@ -426,7 +432,8 @@ export default function DashboardPage() {
                   type="button"
                   onClick={handleConfirmResubmit}
                   disabled={!!actionLoading}
-                  className="px-4 py-2 rounded-lg bg-orange-600 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+                  style={{ background: "#ea580c" }}
                 >
                   {actionLoading === "remove" ? "Resubmitting…" : "Resubmit Anyway"}
                 </button>
@@ -437,112 +444,85 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-400 text-sm mt-1">{user?.email}</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/dashboard/scans"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            View Scan Results
-          </Link>
-          <Link
-            href="/dashboard/review"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Review Queue
-          </Link>
-          <Link
-            href="/dashboard/metrics"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Metrics
-          </Link>
-          <Link
-            href="/dashboard/managed-service"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Concierge Pilot
-          </Link>
-          <Link
-            href="/dashboard/profile"
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
-          >
-            Edit Profile
-          </Link>
-          <button
-            onClick={handleScan}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "scan" ? "Scanning…" : "Run Scan"}
-          </button>
-          <button
-            onClick={handleSubmitRemoval}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "remove" ? "Submitting…" : "Submit Removal"}
-          </button>
-          <button
-            onClick={handleLogout}
-            disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === "logout" ? "Signing out…" : "Sign out"}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        actions={
+          <>
+            <button
+              onClick={handleScan}
+              disabled={!!actionLoading}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors border"
+              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+            >
+              {actionLoading === "scan" ? "Scanning…" : "Run Scan"}
+            </button>
+            <button
+              onClick={handleSubmitRemoval}
+              disabled={!!actionLoading}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors text-white"
+              style={{ background: "var(--accent)" }}
+            >
+              {actionLoading === "remove" ? "Submitting…" : "Submit Removal"}
+            </button>
+          </>
+        }
+      />
 
-      {error && (
-        <div className="rounded-xl border border-red-800 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <Banner tone="error">{error}</Banner>}
 
       {/* Summary Cards */}
       {summary && summary.total > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card label="Total Requests" value={summary.total} />
-          <Card label="Completed" value={summary.completed} color="text-green-400" />
-          <Card label="Pending Action" value={summary.requiresUserAction} color="text-orange-400" />
-          <Card label="Overdue" value={summary.overdue} color="text-red-400" />
+          <StatCard label="Total Requests" value={summary.total} />
+          <StatCard label="Completed" value={summary.completed} />
+          <StatCard label="Pending Action" value={summary.requiresUserAction} />
+          <StatCard label="Overdue" value={summary.overdue} accent={summary.overdue > 0} />
         </div>
       )}
 
       {requests.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4">Delivery Visibility</h2>
+          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Delivery Visibility</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card label="Broker Emails Sent" value={emailedCount} color="text-blue-300" />
-            <Card label="Delivery Issues" value={deliveryIssueCount} color="text-red-400" />
-            <Card label="Manual Fallbacks" value={manualFallbackCount} color="text-orange-400" />
+            <StatCard label="Broker Emails Sent" value={emailedCount} />
+            <StatCard label="Delivery Issues" value={deliveryIssueCount} accent={deliveryIssueCount > 0} />
+            <StatCard label="Manual Fallbacks" value={manualFallbackCount} accent={manualFallbackCount > 0} />
           </div>
         </section>
       )}
 
       {manualFallbackRequests.length > 0 && (
         <section>
-          <div className="rounded-2xl border border-orange-900/60 bg-orange-950/30 p-5">
+          <div
+            className="rounded-2xl border p-5"
+            style={{
+              borderColor: "rgba(146,64,14,0.55)",
+              background: "rgba(120,53,15,0.15)",
+            }}
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-400">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#fb923c" }}>
                   Manual Follow-Up Needed
                 </p>
-                <h2 className="mt-2 text-2xl font-bold text-white">
+                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
                   Some brokers could not be contacted automatically
                 </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-orange-100/80">
+                <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>
                   We already tried the email route for these brokers and it failed.
                   We have switched each one to a direct broker opt-out link so you can
                   finish the request yourself without leaving the dashboard guessing what
                   happened next.
                 </p>
               </div>
-              <div className="rounded-xl border border-orange-900/60 bg-black/20 px-4 py-3 text-sm text-orange-100">
+              <div
+                className="rounded-xl border px-4 py-3 text-sm"
+                style={{
+                  borderColor: "rgba(146,64,14,0.55)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "#fdba74",
+                }}
+              >
                 {manualFallbackRequests.length} broker
                 {manualFallbackRequests.length === 1 ? "" : "s"} need manual follow-up
               </div>
@@ -555,14 +535,18 @@ export default function DashboardPage() {
                 return (
                   <article
                     key={`fallback-${req.id}`}
-                    className="rounded-xl border border-orange-900/50 bg-black/20 p-4"
+                    className="rounded-xl border p-4"
+                    style={{
+                      borderColor: "rgba(146,64,14,0.45)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
-                        <h3 className="text-lg font-semibold text-white">
+                        <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
                           {req.broker.name}
                         </h3>
-                        <p className="mt-1 text-sm text-orange-100/80">
+                        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
                           {getManualFallbackSummary(req)}
                         </p>
                       </div>
@@ -571,7 +555,8 @@ export default function DashboardPage() {
                           href={req.removalUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
+                          className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
+                          style={{ background: "#ea580c" }}
                         >
                           Open broker opt-out page
                         </a>
@@ -579,28 +564,40 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-lg border border-orange-900/40 bg-orange-950/20 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-300">
+                      <div
+                        className="rounded-lg border p-4"
+                        style={{
+                          borderColor: "rgba(146,64,14,0.4)",
+                          background: "rgba(120,53,15,0.12)",
+                        }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#fdba74" }}>
                           What Happened
                         </p>
-                        <p className="mt-2 text-sm leading-6 text-gray-200">
+                        <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                           {getManualFallbackWhatHappened(req)}
                         </p>
                         {req.lastError && (
-                          <p className="mt-3 text-xs leading-5 text-red-300">
+                          <p className="mt-3 text-xs leading-5" style={{ color: "#fca5a5" }}>
                             Last failure: {trimMessage(req.lastError, 220)}
                           </p>
                         )}
                       </div>
 
-                      <div className="rounded-lg border border-orange-900/40 bg-orange-950/20 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-300">
+                      <div
+                        className="rounded-lg border p-4"
+                        style={{
+                          borderColor: "rgba(146,64,14,0.4)",
+                          background: "rgba(120,53,15,0.12)",
+                        }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#fdba74" }}>
                           What To Do Next
                         </p>
-                        <ol className="mt-2 space-y-2 text-sm leading-6 text-gray-200">
+                        <ol className="mt-2 space-y-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                           {nextSteps.map((step, index) => (
                             <li key={`${req.id}-step-${index}`}>
-                              <span className="mr-2 font-semibold text-orange-300">
+                              <span className="mr-2 font-semibold" style={{ color: "#fdba74" }}>
                                 {index + 1}.
                               </span>
                               {step}
@@ -619,37 +616,50 @@ export default function DashboardPage() {
 
       {inboxWatchRequests.length > 0 && (
         <section>
-          <div className="rounded-2xl border border-blue-900/60 bg-blue-950/30 p-5">
+          <div
+            className="rounded-2xl border p-5"
+            style={{
+              borderColor: "rgba(29,78,216,0.45)",
+              background: "rgba(30,64,175,0.12)",
+            }}
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#93c5fd" }}>
                   Check Your Personal Inbox
                 </p>
-                <h2 className="mt-2 text-2xl font-bold text-white">
+                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
                   Some broker replies may bypass NUKE
                 </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-100/80">
+                <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>
                   These broker emails were sent with your personal profile address as the
                   reply target, so identity checks, confirmation links, and completion
                   notices can arrive there instead of back inside the app.
                 </p>
                 {inboxWatchAddresses.length > 0 && (
-                  <p className="mt-3 text-sm leading-6 text-gray-200">
+                  <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                     Watch{" "}
-                    <span className="font-medium text-white">
+                    <span className="font-medium" style={{ color: "var(--text)" }}>
                       {inboxWatchAddresses.join(", ")}
                     </span>{" "}
                     for broker replies.
                   </p>
                 )}
                 {loginDiffersFromReplyInbox && user?.email && (
-                  <p className="mt-2 text-xs leading-5 text-blue-200/80">
+                  <p className="mt-2 text-xs leading-5" style={{ color: "#bfdbfe" }}>
                     Your NUKE login email is {user.email}, which is different from the
                     inbox brokers may be using for follow-up.
                   </p>
                 )}
               </div>
-              <div className="rounded-xl border border-blue-900/60 bg-black/20 px-4 py-3 text-sm text-blue-100">
+              <div
+                className="rounded-xl border px-4 py-3 text-sm"
+                style={{
+                  borderColor: "rgba(29,78,216,0.45)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "#bfdbfe",
+                }}
+              >
                 {inboxWatchRequests.length} broker
                 {inboxWatchRequests.length === 1 ? "" : "s"} may reply outside the app
               </div>
@@ -662,38 +672,55 @@ export default function DashboardPage() {
                 return (
                   <article
                     key={`inbox-watch-${req.id}`}
-                    className="rounded-xl border border-blue-900/50 bg-black/20 p-4"
+                    className="rounded-xl border p-4"
+                    style={{
+                      borderColor: "rgba(29,78,216,0.4)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold text-white">
+                          <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
                             {req.broker.name}
                           </h3>
                           <StatusBadge status={req.status} />
                         </div>
-                        <p className="mt-1 text-sm text-blue-100/80">
+                        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
                           {req.sentAt
                             ? `Broker email sent ${formatDateTime(req.sentAt)}.`
                             : "Broker email delivery is in progress."}{" "}
                           Replies may go to{" "}
-                          <span className="font-medium text-white">
+                          <span className="font-medium" style={{ color: "var(--text)" }}>
                             {req.replyToAddress}
                           </span>
                           .
                         </p>
                       </div>
-                      <div className="rounded-lg border border-blue-900/50 bg-blue-950/20 px-3 py-2 text-xs text-blue-100/90">
+                      <div
+                        className="rounded-lg border px-3 py-2 text-xs"
+                        style={{
+                          borderColor: "rgba(29,78,216,0.4)",
+                          background: "rgba(30,64,175,0.12)",
+                          color: "#bfdbfe",
+                        }}
+                      >
                         Watch for mail from {getBrokerReplyHint(req)}
                       </div>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">
+                      <div
+                        className="rounded-lg border p-4"
+                        style={{
+                          borderColor: "rgba(29,78,216,0.35)",
+                          background: "rgba(30,64,175,0.1)",
+                        }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
                           Why This Matters
                         </p>
-                        <p className="mt-2 text-sm leading-6 text-gray-200">
+                        <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                           If {req.broker.name} asks for identity verification or sends a
                           confirmation link to your personal inbox, NUKE will not know
                           about that action until you complete it or route the reply back
@@ -701,14 +728,20 @@ export default function DashboardPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">
+                      <div
+                        className="rounded-lg border p-4"
+                        style={{
+                          borderColor: "rgba(29,78,216,0.35)",
+                          background: "rgba(30,64,175,0.1)",
+                        }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
                           What To Do Next
                         </p>
-                        <ol className="mt-2 space-y-2 text-sm leading-6 text-gray-200">
+                        <ol className="mt-2 space-y-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
                           {nextSteps.map((step, index) => (
                             <li key={`${req.id}-inbox-step-${index}`}>
-                              <span className="mr-2 font-semibold text-blue-300">
+                              <span className="mr-2 font-semibold" style={{ color: "#93c5fd" }}>
                                 {index + 1}.
                               </span>
                               {step}
@@ -728,24 +761,28 @@ export default function DashboardPage() {
       {/* Action Required Tasks */}
       {tasks.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4">Action Required</h2>
+          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Action Required</h2>
           <div className="space-y-3">
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="bg-orange-950/30 border border-orange-900/50 rounded-lg p-4"
+                className="rounded-lg border p-4"
+                style={{
+                  borderColor: "rgba(146,64,14,0.45)",
+                  background: "rgba(120,53,15,0.14)",
+                }}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-orange-200">{task.title}</h3>
+                      <h3 className="font-medium" style={{ color: "#fdba74" }}>{task.title}</h3>
                       <StatusBadge status={task.status} />
                     </div>
-                    <p className="text-sm text-gray-300 whitespace-pre-line">
+                    <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-muted)" }}>
                       {task.instructions.split("\n\nBroker message excerpt:")[0]}
                     </p>
                     {task.dueAt && (
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="mt-2 text-xs" style={{ color: "var(--text-faint)" }}>
                         Due: {new Date(task.dueAt).toLocaleDateString()}
                       </p>
                     )}
@@ -756,25 +793,32 @@ export default function DashboardPage() {
                         href={task.actionUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium text-center transition-colors"
+                        className="rounded px-3 py-1.5 text-center text-xs font-medium text-white transition-colors"
+                        style={{ background: "#ea580c" }}
                       >
                         Open link
                       </a>
                     )}
                     <button
-                      onClick={() => handleTaskAction(task.id, "completed")}
-                      disabled={!!actionLoading}
-                      className="px-3 py-1.5 bg-green-800 hover:bg-green-700 text-green-200 rounded text-xs font-medium disabled:opacity-50 transition-colors"
-                    >
-                      {actionLoading === `task-${task.id}` ? "..." : "Done"}
-                    </button>
+                        onClick={() => handleTaskAction(task.id, "completed")}
+                        disabled={!!actionLoading}
+                        className="rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 transition-colors"
+                        style={{ background: "rgba(6,95,70,0.35)", color: "#86efac" }}
+                      >
+                        {actionLoading === `task-${task.id}` ? "..." : "Done"}
+                      </button>
                     <button
-                      onClick={() => handleTaskAction(task.id, "dismissed")}
-                      disabled={!!actionLoading}
-                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-xs font-medium disabled:opacity-50 transition-colors"
-                    >
-                      Dismiss
-                    </button>
+                        onClick={() => handleTaskAction(task.id, "dismissed")}
+                        disabled={!!actionLoading}
+                        className="rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 transition-colors"
+                        style={{
+                          background: "var(--bg-subtle)",
+                          color: "var(--text-faint)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        Dismiss
+                      </button>
                   </div>
                 </div>
               </div>
@@ -786,10 +830,10 @@ export default function DashboardPage() {
       {/* Broker Requests Table */}
       {requests.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4">Broker Requests</h2>
-          <div className="border border-gray-800 rounded-lg overflow-x-auto">
+          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Broker Requests</h2>
+          <div className="rounded-lg overflow-x-auto border" style={{ borderColor: "var(--border)" }}>
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-900 text-gray-400">
+              <thead style={{ background: "var(--surface)", color: "var(--text-muted)" }}>
                 <tr>
                   <th className="text-left px-4 py-3 font-medium">Broker</th>
                   <th className="text-left px-4 py-3 font-medium">Category</th>
@@ -801,7 +845,7 @@ export default function DashboardPage() {
                   <th className="text-left px-4 py-3 font-medium">History</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody style={{ borderTop: "1px solid var(--border)" }}>
                 {requests.map((req) => {
                   const delivery = getDeliveryView(req);
                   const isOpen = openTimeline === req.id;
@@ -809,23 +853,29 @@ export default function DashboardPage() {
 
                   return (
                     <Fragment key={req.id}>
-                      <tr key={req.id} className="hover:bg-gray-900/50 align-top">
+                      <tr
+                        key={req.id}
+                        className="align-top"
+                        style={{ borderBottom: "1px solid var(--border)" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+                      >
                         <td className="px-4 py-3">
-                          <div className="font-medium">{req.broker.name}</div>
-                          <div className="mt-1 text-xs text-gray-500">{req.broker.domain}</div>
+                          <div className="font-medium" style={{ color: "var(--text)" }}>{req.broker.name}</div>
+                          <div className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>{req.broker.domain}</div>
                         </td>
-                        <td className="px-4 py-3 text-gray-400">
+                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>
                           {req.broker.category.replace(/_/g, " ")}
                         </td>
-                        <td className="px-4 py-3 text-gray-400">{req.method.replace(/_/g, " ")}</td>
+                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{req.method.replace(/_/g, " ")}</td>
                         <td className="px-4 py-3">
                           <div className="min-w-[18rem]">
-                            <p className={`font-medium ${delivery.titleClassName}`}>
+                            <p className="font-medium" style={{ color: delivery.titleColor }}>
                               {delivery.title}
                             </p>
-                            <p className="mt-1 text-xs text-gray-400">{delivery.detail}</p>
+                            <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>{delivery.detail}</p>
                             {delivery.failure && (
-                              <p className="mt-2 text-xs text-red-300">
+                              <p className="mt-2 text-xs" style={{ color: "#fca5a5" }}>
                                 Last failure: {delivery.failure}
                               </p>
                             )}
@@ -863,15 +913,15 @@ export default function DashboardPage() {
                                 steps from {getBrokerReplyHint(req)}.
                               </p>
                             ) : req.sentAt ? (
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
                                 No action needed unless the broker asks for more information.
                               </p>
                             ) : req.method === "manual_link" ? (
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
                                 Use the direct broker link to complete this opt-out.
                               </p>
                             ) : (
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
                                 Delivery is being tracked automatically.
                               </p>
                             )}
@@ -883,7 +933,8 @@ export default function DashboardPage() {
                             aria-expanded={isOpen}
                             aria-controls={panelId}
                             onClick={() => handleToggleTimeline(req.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 hover:bg-gray-800 text-xs font-medium text-gray-300 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border"
+                            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
                           >
                             <span>{isOpen ? "Hide" : "Show"} timeline</span>
                             <span aria-hidden="true">{isOpen ? "▲" : "▼"}</span>
@@ -896,9 +947,10 @@ export default function DashboardPage() {
                           <td colSpan={8} className="px-0 py-0">
                             <div
                               id={panelId}
-                              className="border-t border-gray-800 bg-gray-950/60 px-6 py-5"
+                              className="px-6 py-5 border-t"
+                              style={{ borderColor: "var(--border)", background: "var(--bg-subtle)" }}
                             >
-                              <h3 className="text-sm font-semibold text-gray-300 mb-4">
+                              <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-2)" }}>
                                 Communication timeline — {req.broker.name}
                               </h3>
                               <TimelinePanel
@@ -922,7 +974,7 @@ export default function DashboardPage() {
 
       {/* Custom Requests */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">Custom Removal Request</h2>
+        <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Custom Removal Request</h2>
         <form onSubmit={handleCustomRequest} className="flex gap-3 mb-4">
           <input
             type="url"
@@ -930,12 +982,14 @@ export default function DashboardPage() {
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
             required
-            className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+            className="flex-1 px-4 py-2 rounded-lg text-sm"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
           />
           <button
             type="submit"
             disabled={!!actionLoading}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors border"
+            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
           >
             {actionLoading === "custom" ? "Adding…" : "Add Request"}
           </button>
@@ -946,7 +1000,8 @@ export default function DashboardPage() {
             {customRequests.map((cr) => (
               <div
                 key={cr.id}
-                className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-sm"
+                className="flex items-center justify-between rounded-lg px-4 py-3 text-sm border"
+                style={{ background: "var(--surface)", borderColor: "var(--border)" }}
               >
                 <div className="truncate flex-1 mr-4">{cr.targetUrl}</div>
                 <div className="flex items-center gap-3">
@@ -970,14 +1025,14 @@ export default function DashboardPage() {
 
       {/* Empty state */}
       {!summary || summary.total === 0 ? (
-        <div className="text-center py-16 text-gray-500">
+        <div className="text-center py-16" style={{ color: "var(--text-faint)" }}>
           <p className="text-lg">No removal requests yet.</p>
           <p className="text-sm mt-2">
             Run a scan to discover exposed data, then submit a removal request.
           </p>
         </div>
       ) : null}
-    </main>
+      </PageContent>
   );
 }
 
@@ -994,47 +1049,42 @@ function TimelinePanel({
   error: string | null;
 }) {
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading timeline…</p>;
+    return <p className="text-sm" style={{ color: "var(--text-faint)" }}>Loading timeline…</p>;
   }
 
   if (error) {
-    return (
-      <p className="text-sm text-red-400">{error}</p>
-    );
+    return <p className="text-sm text-red-400">{error}</p>;
   }
 
   if (!events || events.length === 0) {
     return (
-      <p className="text-sm text-gray-500">
+      <p className="text-sm" style={{ color: "var(--text-faint)" }}>
         No communication events recorded yet beyond the initial submission.
       </p>
     );
   }
 
   return (
-    <ol className="relative border-l border-gray-700 space-y-0">
+    <ol className="relative space-y-0" style={{ borderLeft: "1px solid var(--border-2)" }}>
       {events.map((event, index) => (
         <li key={event.id} className="ml-4 pb-6 last:pb-0">
-          {/* Dot */}
           <span
-            className={`absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full border-2 ${toneDotClass(event.tone)}`}
+            className="absolute -left-[7px] mt-1.5 h-3.5 w-3.5 rounded-full border-2"
+            style={toneDotStyle(event.tone)}
             aria-hidden="true"
           />
-
           <div className="pl-2">
-            <p className="text-xs text-gray-500 mb-0.5">
+            <p className="text-xs mb-0.5" style={{ color: "var(--text-faint)" }}>
               {formatDateTime(event.occurredAt)}
             </p>
-            <p className={`text-sm font-semibold ${toneTitleClass(event.tone)}`}>
+            <p className="text-sm font-semibold" style={{ color: toneTitleColor(event.tone) }}>
               {event.title}
             </p>
-            <p className="text-sm text-gray-400 mt-0.5 leading-5">
+            <p className="text-sm mt-0.5 leading-5" style={{ color: "var(--text-muted)" }}>
               {event.description}
             </p>
             <TimelineEventMeta event={event} />
           </div>
-
-          {/* Spacer line connector hint for last item */}
           {index === events.length - 1 && null}
         </li>
       ))}
@@ -1096,29 +1146,42 @@ function TimelineEventMeta({ event }: { event: TimelineEvent }) {
 
 function MetaChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-gray-700 bg-gray-900 px-2.5 py-0.5 text-xs text-gray-400">
-      <span className="text-gray-500">{label}:</span> {value}
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs border"
+      style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+    >
+      <span style={{ color: "var(--text-faint)" }}>{label}:</span> {value}
     </span>
   );
 }
 
-function toneDotClass(tone: TimelineTone): string {
+function toneDotStyle(tone: TimelineTone): { borderColor: string; background: string } {
   switch (tone) {
-    case "success": return "border-green-500 bg-green-900";
-    case "warning": return "border-orange-500 bg-orange-900";
-    case "danger": return "border-red-500 bg-red-900";
-    case "info": return "border-blue-500 bg-blue-900";
-    default: return "border-gray-600 bg-gray-800";
+    case "success":
+      return { borderColor: "#22c55e", background: "rgba(22,101,52,0.45)" };
+    case "warning":
+      return { borderColor: "#f97316", background: "rgba(154,52,18,0.4)" };
+    case "danger":
+      return { borderColor: "#ef4444", background: "rgba(153,27,27,0.4)" };
+    case "info":
+      return { borderColor: "#3b82f6", background: "rgba(30,64,175,0.35)" };
+    default:
+      return { borderColor: "var(--border-2)", background: "var(--surface-2)" };
   }
 }
 
-function toneTitleClass(tone: TimelineTone): string {
+function toneTitleColor(tone: TimelineTone): string {
   switch (tone) {
-    case "success": return "text-green-300";
-    case "warning": return "text-orange-300";
-    case "danger": return "text-red-300";
-    case "info": return "text-blue-300";
-    default: return "text-gray-200";
+    case "success":
+      return "#86efac";
+    case "warning":
+      return "#fdba74";
+    case "danger":
+      return "#fca5a5";
+    case "info":
+      return "#93c5fd";
+    default:
+      return "var(--text-2)";
   }
 }
 
@@ -1134,23 +1197,6 @@ function classificationLabel(classification: string): string {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
-
-function Card({
-  label,
-  value,
-  color = "text-white",
-}: {
-  label: string;
-  value: number;
-  color?: string;
-}) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-400 mt-1">{label}</div>
-    </div>
-  );
-}
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString();
@@ -1221,7 +1267,7 @@ function getDeliveryView(req: RemovalRequest): {
   title: string;
   detail: string;
   failure: string | null;
-  titleClassName: string;
+  titleColor: string;
 } {
   if (req.lastError) {
     const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
@@ -1233,7 +1279,7 @@ function getDeliveryView(req: RemovalRequest): {
           ? `Last delivery attempt ran on ${formatDateTime(attemptedAt)}. A manual broker link is ready instead.`
           : "Email delivery failed and the request fell back to a manual broker link.",
         failure: trimMessage(req.lastError),
-        titleClassName: "text-orange-300",
+        titleColor: "#fdba74",
       };
     }
 
@@ -1243,7 +1289,7 @@ function getDeliveryView(req: RemovalRequest): {
         ? `The last delivery attempt was recorded on ${formatDateTime(attemptedAt)}.`
         : "A broker delivery attempt failed and may need another retry.",
       failure: trimMessage(req.lastError),
-      titleClassName: "text-red-300",
+      titleColor: "#fca5a5",
     };
   }
 
@@ -1254,7 +1300,7 @@ function getDeliveryView(req: RemovalRequest): {
         ? `Sent ${formatDateTime(req.sentAt)}. Provider id: ${shortId(req.providerMessageId)}`
         : `Sent ${formatDateTime(req.sentAt)}.`,
       failure: null,
-      titleClassName: "text-blue-300",
+      titleColor: "#93c5fd",
     };
   }
 
@@ -1263,7 +1309,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: "Manual link generated",
       detail: "This broker currently relies on a direct manual opt-out link instead of outbound email.",
       failure: null,
-      titleClassName: "text-orange-300",
+      titleColor: "#fdba74",
     };
   }
 
@@ -1272,7 +1318,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: "Form automation path",
       detail: "This broker is tracked as a form-based workflow rather than an email send.",
       failure: null,
-      titleClassName: "text-gray-300",
+      titleColor: "var(--text-muted)",
     };
   }
 
@@ -1281,7 +1327,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: "API workflow path",
       detail: "This broker is tracked as an API-based workflow rather than an email send.",
       failure: null,
-      titleClassName: "text-gray-300",
+      titleColor: "var(--text-muted)",
     };
   }
 
@@ -1291,7 +1337,7 @@ function getDeliveryView(req: RemovalRequest): {
       ? "A previous send attempt was recorded, but the request is still waiting on delivery."
       : "This broker email is queued but has not been sent yet.",
     failure: null,
-    titleClassName: "text-gray-300",
+    titleColor: "var(--text-muted)",
   };
 }
 

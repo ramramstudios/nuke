@@ -12,6 +12,7 @@ import {
   getResponseErrorMessage,
   parseJsonResponse,
 } from "@/lib/http/client-response";
+import { ThemeToggle } from "@/components/AppNav";
 
 type Step = "register" | "login" | "profile";
 type FeedbackTone = "error" | "info";
@@ -395,18 +396,21 @@ export default function OnboardingPage() {
   return (
     <main className="relative flex-1 overflow-hidden px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.14),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(248,113,113,0.08),transparent_28%)]" />
+      <div className="relative mx-auto flex max-w-6xl justify-end pb-4">
+        <ThemeToggle />
+      </div>
 
       <div className="relative mx-auto grid min-h-full w-full max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <section className="auth-enter rounded-[2rem] border border-white/8 bg-white/3 p-6 backdrop-blur-sm sm:p-8 lg:p-10">
+        <section className="auth-enter rounded-[2rem] border p-6 backdrop-blur-sm sm:p-8 lg:p-10" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-red-200">
             Private by default
           </div>
 
           <div className="mt-6 max-w-2xl space-y-5">
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>
               Privacy operations without the messy handoff.
             </h1>
-            <p className="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+            <p className="max-w-xl text-base leading-7 sm:text-lg" style={{ color: "var(--text-2)" }}>
               Create an account, verify your profile, and move from discovery to broker
               outreach inside one focused workspace built for clarity and auditability.
             </p>
@@ -434,21 +438,21 @@ export default function OnboardingPage() {
           </div>
         </section>
 
-        <section className="auth-enter rounded-[2rem] border border-white/10 bg-slate-950/85 p-5 shadow-[0_32px_120px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-7">
-          <div className="rounded-[1.5rem] border border-white/8 bg-slate-900/70 p-4 sm:p-6">
+        <section className="auth-enter rounded-[2rem] border p-5 shadow-xl backdrop-blur-xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--bg-subtle)" }}>
+          <div className="rounded-[1.5rem] border p-4 sm:p-6" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-red-200">
+                <p className="text-sm font-medium text-red-300">
                   {step === "profile" ? "Complete setup" : "Secure account access"}
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--text)" }}>
                   {step === "register"
                     ? "Create your account"
                     : step === "login"
                       ? "Welcome back"
                       : "Finish your profile"}
                 </h2>
-                <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
+                <p className="mt-2 max-w-md text-sm leading-6" style={{ color: "var(--text-muted)" }}>
                   {step === "register"
                     ? "Start with email and password, then add the personal details needed for broker removal requests."
                     : step === "login"
@@ -466,7 +470,8 @@ export default function OnboardingPage() {
             {step !== "profile" && (
               <>
                 <div
-                  className="mt-6 grid grid-cols-2 rounded-2xl border border-white/8 bg-slate-950/80 p-1"
+                  className="mt-6 grid grid-cols-2 rounded-2xl border p-1"
+                  style={{ borderColor: "var(--border)", background: "var(--bg-subtle)" }}
                   role="tablist"
                   aria-label="Authentication mode"
                 >
@@ -503,10 +508,10 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                <div className="my-6 flex items-center gap-4 text-xs uppercase tracking-[0.22em] text-slate-500">
-                  <span className="h-px flex-1 bg-white/8" />
+                <div className="my-6 flex items-center gap-4 text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-faint)" }}>
+                  <span className="h-px flex-1" style={{ background: "var(--border)" }} />
                   <span>Email and password</span>
-                  <span className="h-px flex-1 bg-white/8" />
+                  <span className="h-px flex-1" style={{ background: "var(--border)" }} />
                 </div>
               </>
             )}
@@ -514,11 +519,11 @@ export default function OnboardingPage() {
             {feedback && (
               <div
                 aria-live="polite"
-                className={`mb-6 rounded-2xl border px-4 py-3 text-sm leading-6 ${
-                  feedback.tone === "error"
-                    ? "border-red-500/30 bg-red-500/10 text-red-100"
-                    : "border-sky-400/20 bg-sky-400/10 text-sky-100"
-                }`}
+                className="mb-6 rounded-2xl border px-4 py-3 text-sm leading-6"
+                style={feedback.tone === "error"
+                  ? { borderColor: "rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "rgb(252,165,165)" }
+                  : { borderColor: "rgba(56,189,248,0.2)", background: "rgba(56,189,248,0.08)", color: "rgb(186,230,253)" }
+                }
                 role={feedback.tone === "error" ? "alert" : "status"}
               >
                 {feedback.text}
@@ -563,7 +568,7 @@ export default function OnboardingPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="rounded-lg px-2 py-1 text-sm font-medium text-slate-300 transition-colors hover:bg-white/6 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                      className="rounded-lg px-2 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400" style={{ color: "var(--text-2)" }}
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -578,12 +583,12 @@ export default function OnboardingPage() {
                 >
                   {loading ? "Creating account..." : "Continue securely"}
                 </button>
-                <p className="text-center text-sm text-slate-400">
+                <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
                   Already have an account?{" "}
                   <button
                     type="button"
                     onClick={() => switchStep("login")}
-                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                    className="font-medium underline underline-offset-4 transition-colors hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400" style={{ color: "var(--text)", textDecorationColor: "var(--border-2)" }}
                   >
                     Sign in instead
                   </button>
@@ -627,7 +632,7 @@ export default function OnboardingPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="rounded-lg px-2 py-1 text-sm font-medium text-slate-300 transition-colors hover:bg-white/6 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                      className="rounded-lg px-2 py-1 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400" style={{ color: "var(--text-2)" }}
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -636,13 +641,13 @@ export default function OnboardingPage() {
                   value={password}
                 />
                 <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-slate-500">
+                  <span style={{ color: "var(--text-faint)" }}>
                     Fastest path back to your dashboard.
                   </span>
                   <button
                     type="button"
                     onClick={() => announceUnavailableOption("recovery")}
-                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                    className="font-medium underline underline-offset-4 transition-colors hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400" style={{ color: "var(--text)", textDecorationColor: "var(--border-2)" }}
                   >
                     Forgot password?
                   </button>
@@ -654,12 +659,12 @@ export default function OnboardingPage() {
                 >
                   {loading ? "Signing in..." : "Go to dashboard"}
                 </button>
-                <p className="text-center text-sm text-slate-400">
+                <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
                   New here?{" "}
                   <button
                     type="button"
                     onClick={() => switchStep("register")}
-                    className="font-medium text-white underline decoration-white/25 underline-offset-4 transition-colors hover:text-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                    className="font-medium underline underline-offset-4 transition-colors hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400" style={{ color: "var(--text)", textDecorationColor: "var(--border-2)" }}
                   >
                     Create an account
                   </button>
@@ -785,7 +790,7 @@ export default function OnboardingPage() {
                   </div>
                 </FormSection>
 
-                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/8 px-4 py-3 text-sm leading-6 text-emerald-100">
+                <div className="rounded-2xl border px-4 py-3 text-sm leading-6" style={{ borderColor: "rgba(16,185,129,0.15)", background: "rgba(16,185,129,0.08)", color: "rgb(167,243,208)" }}>
                   Your profile details are encrypted before they are stored and only used to
                   assemble broker-facing deletion requests.
                 </div>
@@ -806,54 +811,37 @@ export default function OnboardingPage() {
   );
 }
 
-function AuthModeButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
+function AuthModeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`rounded-[1rem] px-4 py-3 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
-        active
-          ? "bg-white text-slate-950 shadow-sm"
-          : "text-slate-400 hover:bg-white/6 hover:text-white"
-      }`}
+      className="rounded-[1rem] px-4 py-3 text-sm font-medium transition-all duration-200"
+      style={active
+        ? { background: "var(--text)", color: "var(--bg)", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }
+        : { color: "var(--text-muted)" }
+      }
     >
       {label}
     </button>
   );
 }
 
-function AlternativeAuthButton({
-  badge,
-  description,
-  label,
-  onClick,
-}: {
-  badge: string;
-  description: string;
-  label: string;
-  onClick: () => void;
-}) {
+function AlternativeAuthButton({ badge, description, label, onClick }: { badge: string; description: string; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center justify-between gap-4 rounded-2xl border border-white/8 bg-slate-950/70 px-4 py-3 text-left transition-all duration-200 hover:border-white/16 hover:bg-white/4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+      className="group flex w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-all duration-200"
+      style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}
     >
       <div>
-        <p className="text-sm font-medium text-white">{label}</p>
-        <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+        <p className="text-sm font-medium" style={{ color: "var(--text)" }}>{label}</p>
+        <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p>
       </div>
-      <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-xs font-medium text-slate-300">
+      <span className="rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
         {badge}
       </span>
     </button>
@@ -882,11 +870,11 @@ function AuthField({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-white">
+        <label htmlFor={id} className="text-sm font-medium" style={{ color: "var(--text)" }}>
           {label}
         </label>
         {inputProps.required && (
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+          <span className="text-xs font-medium uppercase tracking-[0.18em]" style={{ color: "var(--text-faint)" }}>
             Required
           </span>
         )}
@@ -897,47 +885,32 @@ function AuthField({
           id={id}
           aria-describedby={describedBy || undefined}
           aria-invalid={Boolean(error)}
-          className={`w-full rounded-2xl border bg-slate-950/90 px-4 py-3.5 text-base text-white placeholder:text-slate-500 transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 ${
-            trailing ? "pr-20" : ""
-          } ${
-            error
-              ? "border-red-400/60 shadow-[0_0_0_1px_rgba(248,113,113,0.2)]"
-              : "border-white/10 hover:border-white/20 focus:border-red-400/60"
-          }`}
+          className={`w-full rounded-2xl px-4 py-3.5 text-base transition-all duration-200 ${trailing ? "pr-20" : ""}`}
+          style={{
+            background: "var(--bg-subtle)",
+            border: `1px solid ${error ? "rgba(248,113,113,0.6)" : "var(--border)"}`,
+            color: "var(--text)",
+          }}
         />
         {trailing && (
-          <div className="absolute inset-y-0 right-2 flex items-center">
-            {trailing}
-          </div>
+          <div className="absolute inset-y-0 right-2 flex items-center">{trailing}</div>
         )}
       </div>
       {error ? (
-        <p id={errorId} className="text-sm leading-6 text-red-200">
-          {error}
-        </p>
+        <p id={errorId} className="text-sm leading-6 text-red-400">{error}</p>
       ) : helperText ? (
-        <p id={hintId} className="text-sm leading-6 text-slate-500">
-          {helperText}
-        </p>
+        <p id={hintId} className="text-sm leading-6" style={{ color: "var(--text-faint)" }}>{helperText}</p>
       ) : null}
     </div>
   );
 }
 
-function FormSection({
-  children,
-  description,
-  title,
-}: {
-  children: ReactNode;
-  description: string;
-  title: string;
-}) {
+function FormSection({ children, description, title }: { children: ReactNode; description: string; title: string }) {
   return (
-    <section className="space-y-4 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-4 sm:p-5">
+    <section className="space-y-4 rounded-2xl border p-4 sm:p-5" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
       <div>
-        <h3 className="text-base font-semibold text-white">{title}</h3>
-        <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+        <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>{title}</h3>
+        <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p>
       </div>
       {children}
     </section>
@@ -946,20 +919,18 @@ function FormSection({
 
 function TrustStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/8 bg-slate-950/45 p-4">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+    <div className="rounded-2xl border p-4" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+      <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{ color: "var(--text-faint)" }}>{label}</p>
+      <p className="mt-3 text-2xl font-semibold" style={{ color: "var(--text)" }}>{value}</p>
     </div>
   );
 }
 
 function TrustPoint({ body, title }: { body: string; title: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/8 bg-slate-950/35 p-4">
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
+    <div className="rounded-2xl border p-4" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{title}</p>
+      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{body}</p>
     </div>
   );
 }
