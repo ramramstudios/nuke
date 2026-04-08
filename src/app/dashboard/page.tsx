@@ -456,6 +456,12 @@ export default function DashboardPage() {
             Review Queue
           </Link>
           <Link
+            href="/dashboard/metrics"
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
+          >
+            Metrics
+          </Link>
+          <Link
             href="/dashboard/profile"
             className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-sm font-medium text-gray-200 transition-colors"
           >
