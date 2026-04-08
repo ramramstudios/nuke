@@ -15,14 +15,15 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Classifies inbound replies into acknowledgment, completion, rejection, needs-more-info, or noise with a review flag for uncertain cases.
 - Falls back to manual-link workflows for brokers that are not yet automated or when automation fails.
 - Automatically retries email brokers that never respond, following a defined retry schedule (7d → 14d → escalate), and escalates unresponsive requests for manual review.
+- Offers a managed-service pilot package with saved enrollment state, seat limits, manual-invoice billing, and dashboard-visible support checkpoints for human follow-up handling.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
 - Form and API broker automation are still stubs.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
-- Operator review tooling is still upcoming.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
+- Managed-service billing is manual for the pilot cohort; Stripe/self-serve subscription checkout is still future work.
 
 ---
 
@@ -171,12 +172,14 @@ src/
 │   ├── page.tsx                    # Landing page
 │   ├── onboarding/page.tsx         # Registration + profile intake
 │   ├── dashboard/page.tsx          # Main dashboard UI
+│   ├── dashboard/managed-service/  # Concierge pilot package + support status
 │   └── api/
 │       ├── auth/{register,login,me}/  # JWT auth endpoints
 │       ├── intake/                    # PII submission (encrypted)
 │       ├── scan/                      # Discovery engine trigger
 │       ├── requests/                  # Unified deletion dispatch + status
 │       ├── brokers/                   # Broker registry list
+│       ├── managed-service/           # Concierge pilot enrollment + status
 │       ├── custom-request/            # Ad-hoc URL removal
 │       ├── inbound/email/              # Inbound broker email webhook
 │       ├── cron/                      # Maintenance jobs endpoint
@@ -256,6 +259,9 @@ Every `RemovalRequest` tracks:
 | GET | `/api/requests` | Compliance summary |
 | GET | `/api/requests?detail=true` | Per-broker request details |
 | GET | `/api/brokers` | List active brokers |
+| GET | `/api/managed-service` | Concierge pilot package + current enrollment |
+| POST | `/api/managed-service` | Reserve a managed-service pilot slot |
+| PATCH | `/api/managed-service` | Mark payment sent or cancel the pilot |
 | POST | `/api/custom-request` | Add ad-hoc removal URL |
 | GET | `/api/custom-request` | List custom requests |
 | POST | `/api/simulate` | MVP: advance broker responses |
@@ -409,6 +415,29 @@ Broker simulation is disabled by default for cron-driven maintenance. Set `ENABL
 
 ---
 
+## Managed-Service Pilot (Phase 2)
+
+NUKE now includes a small-cohort concierge offering for users who want human-supported submission review and follow-up handling on top of the automated email workflow.
+
+### What the pilot includes
+
+- One-time pilot fee of `$299`
+- Up to 25 broker requests included in the package
+- Two human follow-up rounds for email-driven brokers
+- Weekly progress updates and a closeout summary
+- Dashboard-visible status for reservation, payment submission, kickoff queue, and support checkpoints
+
+### Billing and support flow
+
+- Billing is **manual invoice only** for this pilot cohort
+- The dashboard issues an invoice reference and tracks when the user marks payment as sent
+- Kickoff is targeted within 2 business days after payment submission
+- Support communication can be email-first or dashboard-first depending on the user’s selected preference
+
+This is intentionally a pilot workflow, not a full self-serve checkout product. Stripe and broader subscription billing remain later milestones.
+
+---
+
 ## MVP Limitations
 
 This is a prototype focused on architecture, not production readiness:
@@ -422,6 +451,8 @@ This is a prototype focused on architecture, not production readiness:
 - **No document upload** — tasks that require identity verification instruct the user to reply to the broker directly; file upload infrastructure is not yet built
 - **Broker responses are simulated** — use `/api/simulate` to advance state
 - **No real identity verification** — accounts auto-verify on registration
+- **Managed-service billing is manual** — the pilot supports seat reservation and payment/status tracking, but not a real checkout processor yet
+- **No cross-user operator console** — the pilot package is tracked per account today, not through a true admin role dashboard
 - **No Redis/BullMQ** — background jobs run synchronously via API calls
 - **SQLite** — swap to PostgreSQL for production (`DATABASE_URL` in `.env`)
 

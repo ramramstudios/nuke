@@ -23,6 +23,7 @@ model User {
   customRequests   CustomRequest[]
   scans            Scan[]
   tasks            UserTask[]
+  managedServiceEnrollments ManagedServiceEnrollment[]
 }
 
 // PII fields stored as encrypted JSON blobs
@@ -248,6 +249,50 @@ model UserTask {
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// ─── Managed-Service Pilot ───────────────────────────────────
+
+model ManagedServiceEnrollment {
+  id                        String   @id @default(cuid())
+  userId                    String
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  packageKey                String
+  packageName               String
+  status                    String   @default("awaiting_payment")
+  // awaiting_payment | queued | active | completed | canceled
+  billingStatus             String   @default("invoice_pending")
+  // invoice_pending | payment_submitted | paid | refunded
+
+  invoiceReference          String   @unique
+  priceUsd                  Int
+  currency                  String   @default("USD")
+  includedBrokerCount       Int
+  includedFollowUpRounds    Int
+  turnaroundSummary         String
+  supportWorkflowSummary    String
+
+  currentOpenRequestCount   Int      @default(0)
+  currentStalledRequestCount Int     @default(0)
+  currentPendingTaskCount   Int      @default(0)
+  currentPendingReviewCount Int      @default(0)
+
+  contactPreference         String   @default("email")
+  preferredStartWindow      String?
+  notes                     String?
+  latestOperatorNote        String?
+
+  requestedAt               DateTime @default(now())
+  paymentSubmittedAt        DateTime?
+  paidAt                    DateTime?
+  activatedAt               DateTime?
+  completedAt               DateTime?
+  canceledAt                DateTime?
+  nextCheckInAt             DateTime?
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 // ─── Custom / Ad-hoc Removal Requests ───────────────────────
