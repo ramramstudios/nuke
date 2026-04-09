@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth/jwt";
 import { submitDeletionRequest } from "@/lib/dispatcher/dispatch";
 import { processAllPending } from "@/lib/removal/engine";
+import { isFormAutomationEnabled } from "@/lib/automation/config";
 import { getComplianceSummary, getDetailedStatus } from "@/lib/compliance/tracker";
 
 /** POST: Submit a new centralized deletion request */
@@ -12,13 +13,15 @@ export async function POST() {
   }
 
   const result = await submitDeletionRequest(userId);
+  const methods = isFormAutomationEnabled() ? ["email", "form"] : ["email"];
   const processed = await processAllPending(result.deletionRequestId, {
-    methods: ["email"],
+    methods,
   });
 
   return NextResponse.json({
     ...result,
-    emailRequestsProcessed: processed.processed,
+    processedMethods: methods,
+    processedRequests: processed.processed,
   });
 }
 

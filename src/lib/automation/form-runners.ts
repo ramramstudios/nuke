@@ -1,17 +1,11 @@
 import type { PlaywrightRunResult } from "@/lib/automation/session";
+import { runPlaywrightAutomationSession } from "@/lib/automation/session";
 import {
-  runPlaywrightAutomationSession,
-  type PlaywrightAutomationContext,
-} from "@/lib/automation/session";
-import type { RemovalProfileSnapshot } from "@/lib/removal/profile";
-
-export interface BrokerFormAutomationInput {
-  brokerDomain: string;
-  brokerName: string;
-  entryUrl: string;
-  profile: RemovalProfileSnapshot;
-  requestId: string;
-}
+  type BrokerFormAutomationInput,
+  type BrokerFormAutomationResult,
+  type FormAutomationOutcome,
+} from "@/lib/automation/types";
+import { WAVE_ONE_BROKER_FORM_RUNNERS } from "@/lib/automation/wave-one-runners";
 
 export interface FormFoundationSmokeInput {
   brokerDomain: string;
@@ -26,15 +20,7 @@ export class FormAutomationNotImplementedError extends Error {
   }
 }
 
-interface BrokerFormAutomationContext extends PlaywrightAutomationContext {
-  input: BrokerFormAutomationInput;
-}
-
-type BrokerFormRunner = (
-  context: BrokerFormAutomationContext
-) => Promise<void>;
-
-const BROKER_FORM_RUNNERS: Record<string, BrokerFormRunner> = {};
+const BROKER_FORM_RUNNERS = WAVE_ONE_BROKER_FORM_RUNNERS;
 
 export function hasBrokerFormRunner(brokerName: string): boolean {
   return normalizeBrokerKey(brokerName) in BROKER_FORM_RUNNERS;
@@ -46,13 +32,15 @@ export function listRegisteredFormAutomationBrokers(): string[] {
 
 export async function runBrokerFormAutomation(
   input: BrokerFormAutomationInput
-): Promise<PlaywrightRunResult> {
+): Promise<BrokerFormAutomationResult> {
   const runner = BROKER_FORM_RUNNERS[normalizeBrokerKey(input.brokerName)];
   if (!runner) {
     throw new FormAutomationNotImplementedError(input.brokerName);
   }
 
-  const result = await runPlaywrightAutomationSession(
+  let outcome: FormAutomationOutcome = { status: "submitted" };
+
+  const run = await runPlaywrightAutomationSession(
     {
       brokerDomain: input.brokerDomain,
       brokerName: input.brokerName,
@@ -67,20 +55,34 @@ export async function runBrokerFormAutomation(
       context.recordDetail("addressCount", input.profile.addresses.length);
       context.recordDetail("vinPresent", Boolean(input.profile.vin));
 
-      await runner({
-        ...context,
-        input,
-      });
+      outcome =
+        (await runner({
+          ...context,
+          input,
+        })) ?? outcome;
+      context.recordDetail("resultStatus", outcome.status);
+      if (outcome.blockerType) {
+        context.recordDetail("resultBlockerType", outcome.blockerType);
+      }
+      if (outcome.reason) {
+        context.recordDetail("resultReason", outcome.reason);
+      }
+      if (outcome.removalUrl) {
+        context.recordDetail("resultRemovalUrl", outcome.removalUrl);
+      }
     }
   );
 
-  if (result.status === "failed") {
+  if (run.status === "failed") {
     throw new Error(
-      `Form automation failed for ${input.brokerName}. Artifacts: ${result.runDir}. ${result.errorMessage ?? "Unknown error."}`
+      `Form automation failed for ${input.brokerName}. Artifacts: ${run.runDir}. ${run.errorMessage ?? "Unknown error."}`
     );
   }
 
-  return result;
+  return {
+    outcome,
+    run,
+  };
 }
 
 export async function runFormAutomationFoundationSmoke(
@@ -110,5 +112,5 @@ export async function runFormAutomationFoundationSmoke(
 }
 
 function normalizeBrokerKey(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }

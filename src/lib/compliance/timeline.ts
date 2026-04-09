@@ -214,6 +214,10 @@ export async function getRequestTimeline(
 
   // ── 6. Inbound broker replies ────────────────────────────────────────────
   for (const msg of request.inboundMessages) {
+    if (msg.provider === "automation") {
+      continue;
+    }
+
     const classification = msg.classification ?? "unknown";
     const tone = classificationTone(classification);
     const title = classificationTitle(classification, brokerName);
@@ -319,9 +323,15 @@ export async function getRequestTimeline(
       type: "requires_user_action",
       occurredAt: request.updatedAt.toISOString(),
       title: "Action required",
-      description: `${brokerName} requires additional information before completing the removal.`,
+      description:
+        request.lastError ??
+        `${brokerName} requires additional information before completing the removal.`,
       tone: "warning",
-      metadata: { brokerName },
+      metadata: {
+        brokerName,
+        actionUrl: request.removalUrl ?? undefined,
+        failureReason: request.lastError ?? undefined,
+      },
     });
   }
 

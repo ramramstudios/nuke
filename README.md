@@ -17,11 +17,12 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Automatically retries email brokers that never respond, following a defined retry schedule (7d → 14d → escalate), and escalates unresponsive requests for manual review.
 - Offers a managed-service pilot package with saved enrollment state, seat limits, manual-invoice billing, and dashboard-visible support checkpoints for human follow-up handling.
 - Includes a Playwright form-automation foundation with reusable browser-session helpers, artifact capture, and a form-foundation smoke test.
+- Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
-- Form broker execution now has a Playwright foundation, but broker-specific form automations are not implemented yet.
+- Form broker execution now includes broker-specific assisted flows for Spokeo and Advanced Background Checks. Both can reach the farthest reliable step automatically and then hand the user into the exact remaining chore with blocker classification and evidence. FastPeopleSearch still has an experimental runner, but live bot-check challenges make it a weaker practical target right now.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 - Managed-service billing is manual for the pilot cohort; Stripe/self-serve subscription checkout is still future work.
@@ -465,7 +466,7 @@ This is a prototype focused on architecture, not production readiness:
 
 ### Near-term
 - [x] Playwright form automation foundation and smoke path
-- [ ] Broker-specific Playwright automation for the first prioritized brokers
+- [ ] Broker-specific Playwright automation for the first prioritized brokers reaches full end-to-end completion without live challenge handoffs
 - [ ] Real email sending via SendGrid/Resend
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ for async job processing

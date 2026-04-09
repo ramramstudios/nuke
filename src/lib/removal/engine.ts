@@ -17,6 +17,7 @@ import { isFormAutomationEnabled } from "@/lib/automation/config";
 import {
   runBrokerFormAutomation,
 } from "@/lib/automation/form-runners";
+import type { BrokerFormAutomationResult } from "@/lib/automation/types";
 import { buildBrokerDeletionEmail } from "@/lib/removal/email-template";
 import {
   deliverBrokerEmail,
@@ -24,6 +25,10 @@ import {
 } from "@/lib/removal/email-delivery";
 import { decodeRemovalProfileSnapshot } from "@/lib/removal/profile";
 import { RETRY_SCHEDULE } from "@/lib/removal/retry";
+import {
+  dismissAutomationTasksForRemovalRequest,
+  syncAutomationTaskForBlockedForm,
+} from "@/lib/tasks/automation";
 
 /**
  * Process a single removal request.
@@ -56,17 +61,18 @@ export async function processRemoval(requestId: string): Promise<void> {
         break;
 
       case "form":
-        await attemptFormRemoval({
-          brokerDomain: req.broker.domain,
-          brokerName: req.broker.name,
-          endpoint: req.broker.removalEndpoint,
-          payloadSnapshot: req.deletionRequest.payloadSnapshot,
-          requestId: req.id,
-        });
-        await prisma.removalRequest.update({
-          where: { id: req.id },
-          data: { status: "submitted", submittedAt: now, deadline },
-        });
+        await finalizeFormRemoval(
+          req.id,
+          await attemptFormRemoval({
+            brokerDomain: req.broker.domain,
+            brokerName: req.broker.name,
+            endpoint: req.broker.removalEndpoint,
+            payloadSnapshot: req.deletionRequest.payloadSnapshot,
+            requestId: req.id,
+          }),
+          now,
+          deadline
+        );
         break;
 
       case "email": {
@@ -125,7 +131,7 @@ export async function processRemoval(requestId: string): Promise<void> {
         method: "manual_link",
         submittedAt: now,
         deadline,
-        ...(req.method === "email"
+        ...((req.method === "email" || req.method === "form")
           ? {
               lastError: safeError,
               lastAttemptAt: now,
@@ -174,24 +180,92 @@ async function attemptFormRemoval(input: {
   endpoint: string | null;
   payloadSnapshot: string;
   requestId: string;
-}): Promise<void> {
+}): Promise<BrokerFormAutomationResult> {
   if (!input.endpoint) throw new Error("No form endpoint configured");
 
   if (!isFormAutomationEnabled()) {
     // Keep the current MVP behavior until broker-specific runners land.
     await delay(200);
-    return;
+    return {
+      outcome: {
+        status: "submitted",
+      },
+      run: {
+        brokerDomain: input.brokerDomain,
+        brokerName: input.brokerName,
+        entryUrl: input.endpoint,
+        errorMessage: null,
+        finalUrl: input.endpoint,
+        finishedAt: new Date().toISOString(),
+        logEntries: 0,
+        logPath: "",
+        metadataPath: "",
+        pageTitle: null,
+        runDir: "",
+        runId: "",
+        screenshots: [],
+        startedAt: new Date().toISOString(),
+        status: "succeeded",
+        tracePath: null,
+      },
+    };
   }
 
   const profile = decodeRemovalProfileSnapshot(input.payloadSnapshot);
 
-  await runBrokerFormAutomation({
+  return runBrokerFormAutomation({
     brokerDomain: input.brokerDomain,
     brokerName: input.brokerName,
     entryUrl: input.endpoint,
     profile,
     requestId: input.requestId,
   });
+}
+
+async function finalizeFormRemoval(
+  requestId: string,
+  result: BrokerFormAutomationResult,
+  now: Date,
+  deadline: Date
+): Promise<void> {
+  if (result.outcome.status === "requires_user_action") {
+    await prisma.removalRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "requires_user_action",
+        removalUrl: result.outcome.removalUrl ?? null,
+        submittedAt: now,
+        deadline,
+        lastError: result.outcome.reason ?? null,
+        lastAttemptAt: now,
+        attemptCount: { increment: 1 },
+      },
+    });
+    await syncAutomationTaskForBlockedForm({
+      removalRequestId: requestId,
+      blockerType: result.outcome.blockerType,
+      reason:
+        result.outcome.reason ??
+        "The broker flow still needs a manual step before it can continue.",
+      actionUrl: result.outcome.removalUrl ?? null,
+      occurredAt: now,
+    });
+    return;
+  }
+
+  await prisma.removalRequest.update({
+    where: { id: requestId },
+    data: {
+      status: "submitted",
+      removalUrl: result.outcome.removalUrl ?? null,
+      submittedAt: now,
+      deadline,
+      lastError: null,
+      lastAttemptAt: now,
+      attemptCount: { increment: 1 },
+    },
+  });
+  await dismissAutomationTasksForRemovalRequest(requestId);
 }
 
 async function sendDeletionEmail(input: {

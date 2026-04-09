@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { isFormAutomationEnabled } from "@/lib/automation/config";
 import { runScan } from "@/lib/crawler/scanner";
 import { processAllPending } from "@/lib/removal/engine";
 import { flagOverdueRequests, simulateBrokerResponses } from "@/lib/compliance/tracker";
@@ -53,8 +54,9 @@ export async function processAllPendingRemovals(): Promise<{ processed: number }
   });
 
   let total = 0;
+  const methods = isFormAutomationEnabled() ? undefined : ["email"];
   for (const dr of active) {
-    const result = await processAllPending(dr.id);
+    const result = await processAllPending(dr.id, { methods });
     total += result.processed;
   }
 

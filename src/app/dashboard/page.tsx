@@ -360,7 +360,9 @@ export default function DashboardPage() {
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
   const emailedCount = requests.filter((req) => Boolean(req.sentAt)).length;
-  const deliveryIssueCount = requests.filter((req) => Boolean(req.lastError)).length;
+  const deliveryIssueCount = requests.filter(
+    (req) => Boolean(req.lastError) && !isFormActionRequired(req)
+  ).length;
   const manualFallbackRequests = requests.filter((req) => isManualFallback(req));
   const manualFallbackCount = manualFallbackRequests.length;
   const inboxWatchRequests = requests.filter((req) => shouldMonitorPersonalInbox(req));
@@ -897,7 +899,9 @@ export default function DashboardPage() {
                                   rel="noopener noreferrer"
                                   className="text-red-400 hover:text-red-300 underline text-xs"
                                 >
-                                  {isManualFallback(req)
+                                  {isFormActionRequired(req)
+                                    ? getFormActionLinkLabel(req)
+                                    : isManualFallback(req)
                                     ? "Open broker opt-out page →"
                                     : "Open opt-out link →"}
                                 </a>
@@ -906,6 +910,10 @@ export default function DashboardPage() {
                               <p className="text-xs text-orange-300">
                                 Next: open the broker page, complete their opt-out flow,
                                 and then check back here for any follow-up tasks.
+                              </p>
+                            ) : isFormActionRequired(req) ? (
+                              <p className="text-xs text-blue-200">
+                                {getFormActionHelpText(req)}
                               </p>
                             ) : shouldMonitorPersonalInbox(req) ? (
                               <p className="text-xs text-blue-200">
@@ -1206,6 +1214,10 @@ function isManualFallback(req: RemovalRequest) {
   return req.method === "manual_link" && Boolean(req.lastError);
 }
 
+function isFormActionRequired(req: RemovalRequest) {
+  return req.method === "form" && req.status === "requires_user_action";
+}
+
 function shouldMonitorPersonalInbox(req: RemovalRequest) {
   return (
     req.method === "email" &&
@@ -1269,6 +1281,16 @@ function getDeliveryView(req: RemovalRequest): {
   failure: string | null;
   titleColor: string;
 } {
+  if (isFormActionRequired(req)) {
+    const attemptedAt = req.lastAttemptAt ?? req.submittedAt;
+    return {
+      title: getFormActionTitle(req),
+      detail: getFormActionDetail(req, attemptedAt),
+      failure: req.lastError ? trimMessage(req.lastError) : null,
+      titleColor: "#93c5fd",
+    };
+  }
+
   if (req.lastError) {
     const attemptedAt = req.lastAttemptAt ?? req.sentAt ?? req.submittedAt;
 
@@ -1299,6 +1321,15 @@ function getDeliveryView(req: RemovalRequest): {
       detail: req.providerMessageId
         ? `Sent ${formatDateTime(req.sentAt)}. Provider id: ${shortId(req.providerMessageId)}`
         : `Sent ${formatDateTime(req.sentAt)}.`,
+      failure: null,
+      titleColor: "#93c5fd",
+    };
+  }
+
+  if (req.method === "form" && req.status === "submitted" && req.submittedAt) {
+    return {
+      title: "Broker form submitted",
+      detail: `Form workflow ran on ${formatDateTime(req.submittedAt)}.`,
       failure: null,
       titleColor: "#93c5fd",
     };
@@ -1344,6 +1375,93 @@ function getDeliveryView(req: RemovalRequest): {
 function trimMessage(value: string, maxLength = 160) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function getFormActionTitle(req: RemovalRequest) {
+  const reason = req.lastError?.toLowerCase() ?? "";
+
+  if (reason.includes("verification form")) {
+    return "Verification form needs your help";
+  }
+  if (reason.includes("captcha")) {
+    return "CAPTCHA blocking broker step";
+  }
+  if (reason.includes("bot-check") || reason.includes("bot check")) {
+    return "Broker bot-check blocked automation";
+  }
+  if (reason.includes("could not confidently match")) {
+    return "Profile match still needs review";
+  }
+  if (reason.includes("confirmation state")) {
+    return "Submission needs review";
+  }
+
+  return "Form needs a final manual step";
+}
+
+function getFormActionDetail(req: RemovalRequest, attemptedAt: string | null) {
+  const when = attemptedAt ? ` on ${formatDateTime(attemptedAt)}` : "";
+  const reason = req.lastError?.toLowerCase() ?? "";
+
+  if (reason.includes("verification form")) {
+    return `NUKE reached ${req.broker.name}${when} and filled the initial verification form, but you still need to complete the broker's CAPTCHA step so it can send the removal link by email.`;
+  }
+  if (reason.includes("captcha")) {
+    return `NUKE reached ${req.broker.name}${when} and prefilled the broker form, but the final submit is gated behind a live CAPTCHA.`;
+  }
+  if (reason.includes("bot-check") || reason.includes("bot check")) {
+    return `${req.broker.name} redirected the automation to a live bot-check${when}, so NUKE stopped instead of forcing the flow.`;
+  }
+  if (reason.includes("could not confidently match")) {
+    return `NUKE searched ${req.broker.name}${when}, but it could not safely choose the right listing from the available matches.`;
+  }
+  if (reason.includes("confirmation state")) {
+    return `NUKE filled the ${req.broker.name} form${when}, but the page did not return a clear enough success state to trust automatically.`;
+  }
+
+  return attemptedAt
+    ? `Automation reached the broker workflow on ${formatDateTime(
+        attemptedAt
+      )}, but the remaining challenge or confirmation step still needs you.`
+    : "Automation reached the broker workflow, but the remaining challenge or confirmation step still needs you.";
+}
+
+function getFormActionLinkLabel(req: RemovalRequest) {
+  const reason = req.lastError?.toLowerCase() ?? "";
+
+  if (reason.includes("verification form")) {
+    return "Open verification form →";
+  }
+  if (reason.includes("captcha")) {
+    return "Open prefilled opt-out page →";
+  }
+  if (reason.includes("bot-check") || reason.includes("bot check")) {
+    return "Open broker challenge page →";
+  }
+  if (reason.includes("could not confidently match")) {
+    return "Review broker search results →";
+  }
+
+  return "Finish broker form →";
+}
+
+function getFormActionHelpText(req: RemovalRequest) {
+  const reason = req.lastError?.toLowerCase() ?? "";
+
+  if (reason.includes("verification form")) {
+    return "Open the broker form, confirm your name and email, complete the CAPTCHA, submit it, and then watch for the broker's removal-link email.";
+  }
+  if (reason.includes("captcha")) {
+    return "NUKE reached the broker’s prefilled opt-out page, but you still need to solve the live CAPTCHA before the broker will accept it.";
+  }
+  if (reason.includes("bot-check") || reason.includes("bot check")) {
+    return "The broker presented a bot-check, so NUKE stopped and handed the page back to you instead of risking a brittle automation failure.";
+  }
+  if (reason.includes("could not confidently match")) {
+    return "NUKE found likely matching listings, but it would rather ask you to pick the right one than submit against the wrong person.";
+  }
+
+  return "NUKE reached the broker workflow, but you still need to finish a challenge or confirmation step on the broker page.";
 }
 
 function shortId(value: string, maxLength = 20) {

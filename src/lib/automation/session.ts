@@ -11,6 +11,11 @@ import {
   type PlaywrightFoundationConfig,
 } from "@/lib/automation/config";
 
+const DEFAULT_AUTOMATION_LOCALE = "en-US";
+const DEFAULT_AUTOMATION_VIEWPORT = { width: 1440, height: 1100 };
+const DEFAULT_CHROMIUM_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+
 export type AutomationRunStatus = "succeeded" | "failed";
 export type AutomationLogLevel = "info" | "warn" | "error";
 
@@ -143,6 +148,12 @@ export async function runPlaywrightAutomationSession(
     const browserType = playwright[config.browserName];
 
     browser = await browserType.launch({
+      ...(config.browserName === "chromium"
+        ? {
+            ignoreDefaultArgs: ["--enable-automation"],
+            args: ["--disable-blink-features=AutomationControlled"],
+          }
+        : {}),
       ...(config.browserName === "chromium" && config.browserChannel
         ? { channel: config.browserChannel }
         : {}),
@@ -151,8 +162,19 @@ export async function runPlaywrightAutomationSession(
       ...(config.proxyUrl ? { proxy: { server: config.proxyUrl } } : {}),
     });
 
-    context = await browser.newContext();
+    context = await browser.newContext({
+      locale: DEFAULT_AUTOMATION_LOCALE,
+      viewport: DEFAULT_AUTOMATION_VIEWPORT,
+      ...(config.browserName === "chromium"
+        ? { userAgent: DEFAULT_CHROMIUM_USER_AGENT }
+        : {}),
+    });
     context.setDefaultTimeout(config.defaultTimeoutMs);
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+      });
+    });
 
     if (config.traceEnabled) {
       await context.tracing.start({
@@ -249,12 +271,15 @@ export async function runPlaywrightAutomationSession(
     brokerName: input.brokerName,
     browserName: config.browserName,
     browserChannel: config.browserChannel,
+    browserUserAgent:
+      config.browserName === "chromium" ? DEFAULT_CHROMIUM_USER_AGENT : null,
     defaultTimeoutMs: config.defaultTimeoutMs,
     entryUrl: input.entryUrl,
     errorMessage,
     finalUrl,
     finishedAt: finishedAt.toISOString(),
     headless: config.headless,
+    locale: DEFAULT_AUTOMATION_LOCALE,
     navigationTimeoutMs: config.navigationTimeoutMs,
     pageTitle,
     proxyConfigured: Boolean(config.proxyUrl),
@@ -266,6 +291,7 @@ export async function runPlaywrightAutomationSession(
     status,
     traceEnabled: config.traceEnabled,
     tracePath,
+    viewport: DEFAULT_AUTOMATION_VIEWPORT,
     detail,
   };
 

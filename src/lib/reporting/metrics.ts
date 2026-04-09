@@ -92,6 +92,7 @@ async function getMetricsRequests(userId: string) {
         select: {
           id: true,
           receivedAt: true,
+          provider: true,
           classification: true,
           requiresReview: true,
         },
@@ -120,7 +121,10 @@ async function getMetricsRequests(userId: string) {
 function analyzeRequest(request: RequestRecord, now: Date): AnalyzedRequest {
   const submittedAt = request.submittedAt ?? request.sentAt ?? request.createdAt;
   const meaningfulReplies = request.inboundMessages
-    .filter((message) => message.classification !== "noise")
+    .filter(
+      (message) =>
+        message.provider !== "automation" && message.classification !== "noise"
+    )
     .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
   const firstReplyAt = meaningfulReplies[0]?.receivedAt ?? null;
   const replyCount = meaningfulReplies.length;
@@ -149,7 +153,9 @@ function analyzeRequest(request: RequestRecord, now: Date): AnalyzedRequest {
     return leftTime - rightTime;
   })[0];
   const pendingReview =
-    request.inboundMessages.some((message) => message.requiresReview) ||
+    request.inboundMessages.some(
+      (message) => message.provider !== "automation" && message.requiresReview
+    ) ||
     activeTasks.some((task) => task.requiresReview || task.status === "pending_review");
   const requiresUserAction =
     request.status === "requires_user_action" ||
