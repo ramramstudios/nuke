@@ -7,11 +7,16 @@
  *   3. Email request
  *   4. Fallback: discover user-actionable link
  *
- * MVP: API/form methods are still simulated. Email brokers can now use
- * a phase 1 outbound delivery flow, while broker responses remain simulated.
+ * API methods are still simulated. Form brokers now have a gated
+ * Playwright foundation, but broker-specific runners are still added
+ * incrementally. Email brokers can use the phase 1 outbound delivery flow.
  */
 
 import { prisma } from "@/lib/db";
+import { isFormAutomationEnabled } from "@/lib/automation/config";
+import {
+  runBrokerFormAutomation,
+} from "@/lib/automation/form-runners";
 import { buildBrokerDeletionEmail } from "@/lib/removal/email-template";
 import {
   deliverBrokerEmail,
@@ -51,7 +56,13 @@ export async function processRemoval(requestId: string): Promise<void> {
         break;
 
       case "form":
-        await attemptFormRemoval(req.broker.removalEndpoint);
+        await attemptFormRemoval({
+          brokerDomain: req.broker.domain,
+          brokerName: req.broker.name,
+          endpoint: req.broker.removalEndpoint,
+          payloadSnapshot: req.deletionRequest.payloadSnapshot,
+          requestId: req.id,
+        });
         await prisma.removalRequest.update({
           where: { id: req.id },
           data: { status: "submitted", submittedAt: now, deadline },
@@ -157,10 +168,30 @@ async function attemptApiRemoval(endpoint: string | null): Promise<void> {
   await delay(100);
 }
 
-async function attemptFormRemoval(endpoint: string | null): Promise<void> {
-  // TODO: Playwright browser automation
-  if (!endpoint) throw new Error("No form endpoint configured");
-  await delay(200);
+async function attemptFormRemoval(input: {
+  brokerDomain: string;
+  brokerName: string;
+  endpoint: string | null;
+  payloadSnapshot: string;
+  requestId: string;
+}): Promise<void> {
+  if (!input.endpoint) throw new Error("No form endpoint configured");
+
+  if (!isFormAutomationEnabled()) {
+    // Keep the current MVP behavior until broker-specific runners land.
+    await delay(200);
+    return;
+  }
+
+  const profile = decodeRemovalProfileSnapshot(input.payloadSnapshot);
+
+  await runBrokerFormAutomation({
+    brokerDomain: input.brokerDomain,
+    brokerName: input.brokerName,
+    entryUrl: input.endpoint,
+    profile,
+    requestId: input.requestId,
+  });
 }
 
 async function sendDeletionEmail(input: {

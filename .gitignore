@@ -49,5 +49,6 @@ prisma/dev.db-journal
 # playwright
 /test-results/
 /playwright-report/
+/.artifacts/
 phase-roadmap.csv
 deployment-plan.md

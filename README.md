@@ -16,11 +16,12 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Falls back to manual-link workflows for brokers that are not yet automated or when automation fails.
 - Automatically retries email brokers that never respond, following a defined retry schedule (7d → 14d → escalate), and escalates unresponsive requests for manual review.
 - Offers a managed-service pilot package with saved enrollment state, seat limits, manual-invoice billing, and dashboard-visible support checkpoints for human follow-up handling.
+- Includes a Playwright form-automation foundation with reusable browser-session helpers, artifact capture, and a form-foundation smoke test.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
-- Form and API broker automation are still stubs.
+- Form broker execution now has a Playwright foundation, but broker-specific form automations are not implemented yet.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 - Managed-service billing is manual for the pilot cohort; Stripe/self-serve subscription checkout is still future work.
@@ -190,6 +191,7 @@ src/
 │   ├── brokers/       # Broker seed registry and opt-out metadata
 │   ├── crawler/       # Discovery/scanning engine
 │   ├── dispatcher/    # DROP-style centralized deletion dispatch
+│   ├── automation/    # Playwright foundation, form runners, artifact capture
 │   ├── removal/       # Removal engine (API → form → email → fallback)
 │   ├── compliance/    # SLA tracking, overdue detection, status summaries
 │   ├── communications/  # Inbound message ingestion & matching
@@ -228,7 +230,7 @@ Each broker defines: domain, search method, removal method, SLA, tier, priority,
 
 ```
 1. API (programmatic DELETE)
-2. Form (Playwright automation — stub in MVP)
+2. Form (Playwright foundation in place; broker-specific flows still pending)
 3. Email (structured deletion request)
 4. Manual Link (discovers opt-out URL, shows to user)
 ```
@@ -443,7 +445,8 @@ This is intentionally a pilot workflow, not a full self-serve checkout product. 
 This is a prototype focused on architecture, not production readiness:
 
 - **Scan results are simulated** — random probability based on broker category
-- **Form and API removal methods are still stubbed** — no real HTTP calls or Playwright automation yet
+- **API removal methods are still stubbed** — no real HTTP calls yet
+- **Broker-specific Playwright form flows are still pending** — the browser foundation, env knobs, and artifact capture exist, but named broker automations are not implemented yet
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
 - **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
@@ -461,7 +464,8 @@ This is a prototype focused on architecture, not production readiness:
 ## Roadmap
 
 ### Near-term
-- [ ] Playwright form automation for top 5 brokers
+- [x] Playwright form automation foundation and smoke path
+- [ ] Broker-specific Playwright automation for the first prioritized brokers
 - [ ] Real email sending via SendGrid/Resend
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ for async job processing
@@ -498,6 +502,9 @@ npm run db:push      # Push schema to database
 npm run db:seed      # Seed broker registry
 npm run db:studio    # Open Prisma Studio (GUI)
 npm run db:reset     # Reset DB + re-seed
+npm run smoke:email  # Live email smoke test for one email broker
+npm run smoke:form   # Playwright foundation smoke test for one form broker
+npm run automation:install-browser  # Install Chromium for Playwright runs
 ```
 
 ---
@@ -514,7 +521,7 @@ npm run db:reset     # Reset DB + re-seed
 | Validation | Zod |
 | Styling | Tailwind CSS 4 |
 | Jobs (planned) | BullMQ + Redis |
-| Automation (planned) | Playwright |
+| Automation | Playwright |
 
 ---
 
