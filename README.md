@@ -17,7 +17,7 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Automatically retries email brokers that never respond, following a defined retry schedule (7d → 14d → escalate), and escalates unresponsive requests for manual review.
 - Offers a managed-service pilot package with saved enrollment state, seat limits, manual-invoice billing, and dashboard-visible support checkpoints for human follow-up handling.
 - Includes a Playwright form-automation foundation with reusable browser-session helpers, artifact capture, and a form-foundation smoke test.
-- Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state.
+- Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state, including CAPTCHA, bot-check, rate-limit, email-confirmation, identity-verification, profile-URL, and record-selection blockers.
 
 What is still limited today:
 

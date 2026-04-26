@@ -17,10 +17,14 @@ export type FormAutomationBlockerType =
   | "ambiguous_match"
   | "captcha"
   | "bot_check"
+  | "rate_limit"
   | "confirmation_required"
+  | "identity_verification"
+  | "document_upload"
   | "record_selection_required"
   | "profile_url_required"
   | "unclear_submission"
+  | "automation_runtime_failure"
   | "automation_gap";
 
 export interface FormAutomationOutcome {

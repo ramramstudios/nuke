@@ -15,6 +15,7 @@
     "smoke:email": "node --import tsx scripts/email-smoke-test.ts",
     "smoke:form": "node --import tsx scripts/form-foundation-smoke.ts",
     "smoke:p3c4": "node --import tsx scripts/p3c4-assisted-smoke.ts",
+    "smoke:p3c5": "node --import tsx scripts/p3c5-challenge-smoke.ts",
     "automation:install-browser": "npx playwright install chromium"
   },
   "dependencies": {

@@ -1,4 +1,8 @@
 import type { Page } from "playwright";
+import {
+  detectAutomationBlockerOnPage,
+  pageHasCaptcha,
+} from "@/lib/automation/challenges";
 import type {
   BrokerFormRunner,
   FormAutomationOutcome,
@@ -1387,39 +1391,11 @@ async function ensureCheckbox(page: Page, selector: string): Promise<void> {
 }
 
 async function hasCaptcha(page: Page): Promise<boolean> {
-  const bodyText = await page.locator("body").innerText().catch(() => "");
-  if (/captcha|recaptcha/i.test(bodyText)) {
-    return true;
-  }
-
-  const selectors = [
-    "iframe[title*='reCAPTCHA']",
-    ".g-recaptcha",
-    "textarea[name='g-recaptcha-response']",
-    "input[name='recaptcha']",
-  ];
-
-  for (const selector of selectors) {
-    if ((await page.locator(selector).count()) > 0) {
-      return true;
-    }
-  }
-
-  return false;
+  return pageHasCaptcha(page);
 }
 
 async function isBrokerChallenge(page: Page): Promise<boolean> {
-  if (await hasCaptcha(page)) return true;
-
-  const title = await page.title().catch(() => "");
-  if (/access denied|attention required|just a moment|rate limited|security/i.test(title)) {
-    return true;
-  }
-
-  const bodyText = await page.locator("body").innerText().catch(() => "");
-  return /access denied|attention required|checking your browser|enable javascript and cookies|security challenge|rate limited|cloudflare|blocked/i.test(
-    bodyText
-  );
+  return Boolean(await detectAutomationBlockerOnPage(page, "The broker"));
 }
 
 async function isFastPeopleSearchChallenge(page: Page): Promise<boolean> {

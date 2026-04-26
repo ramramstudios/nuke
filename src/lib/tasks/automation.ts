@@ -253,6 +253,54 @@ function buildAutomationTaskContent(
         ].join("\n"),
       };
 
+    case "rate_limit":
+      return {
+        actionType: "retry_later",
+        title: `${brokerName}: Retry after rate limit`,
+        instructions: [
+          `${brokerName} rate-limited or temporarily blocked the automation attempt.`,
+          "Open the broker page using the task link after waiting a little while.",
+          "Continue the opt-out manually if the page loads normally.",
+          "If the broker still shows a rate-limit screen, leave this task open for a later retry.",
+        ].join("\n"),
+      };
+
+    case "confirmation_required":
+      return {
+        actionType: "click_confirm",
+        title: `${brokerName}: Confirm email request`,
+        instructions: [
+          `${brokerName} requires an email confirmation before the removal can continue.`,
+          "Check the inbox for the email address used in your NUKE profile.",
+          "Open the broker's confirmation or verification link.",
+          "Return to the dashboard after completing the email step.",
+        ].join("\n"),
+      };
+
+    case "identity_verification":
+      return {
+        actionType: "verify_identity",
+        title: `${brokerName}: Verify identity`,
+        instructions: [
+          `${brokerName} requires identity verification before this removal can continue.`,
+          "Open the broker page using the task link.",
+          "Provide only the information the broker requires for the privacy request.",
+          "Do not upload sensitive documents unless you are comfortable with the broker's instructions.",
+        ].join("\n"),
+      };
+
+    case "document_upload":
+      return {
+        actionType: "verify_identity",
+        title: `${brokerName}: Review document request`,
+        instructions: [
+          `${brokerName} is asking for a document upload before it will continue the removal request.`,
+          "Open the broker page using the task link and review exactly what document is requested.",
+          "Complete the step only if the request looks legitimate and necessary.",
+          "Consider routing this to managed-service review if you are unsure.",
+        ].join("\n"),
+      };
+
     case "record_selection_required":
       return {
         actionType: "review_broker_match",
@@ -286,6 +334,30 @@ function buildAutomationTaskContent(
           "Open the broker page again using the task link.",
           "Check whether the form still needs submission or whether a success message is visible.",
           "Complete the submission manually if needed.",
+        ].join("\n"),
+      };
+
+    case "automation_runtime_failure":
+      return {
+        actionType: "operator_review",
+        title: `${brokerName}: Automation needs review`,
+        instructions: [
+          `${brokerName} automation stopped before NUKE could reach a trustworthy broker state.`,
+          "Open the broker link from this task to continue manually.",
+          "If you are an operator, review the automation artifacts and retry the run after confirming browser access.",
+          "Leave this task open if the broker page still cannot be reached.",
+        ].join("\n"),
+      };
+
+    case "automation_gap":
+      return {
+        actionType: "complete_broker_form",
+        title: `${brokerName}: Continue manually`,
+        instructions: [
+          `${brokerName} does not yet have a complete broker-specific automation path for this step.`,
+          "Open the broker link from this task.",
+          "Complete the visible opt-out or privacy request flow manually.",
+          "Return to the dashboard afterward so NUKE can keep tracking follow-up state.",
         ].join("\n"),
       };
 

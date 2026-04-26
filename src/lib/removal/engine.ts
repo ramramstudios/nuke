@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { classifyAutomationFailure } from "@/lib/automation/challenges";
 import { isFormAutomationEnabled } from "@/lib/automation/config";
 import {
   runBrokerFormAutomation,
@@ -123,6 +124,18 @@ export async function processRemoval(requestId: string): Promise<void> {
     const safeError = toSafeErrorMessage(error);
     // If primary method fails, try fallback to manual link
     const fallbackUrl = await discoverRemovalLink(req.broker.domain);
+    if (req.method === "form") {
+      await finalizeFailedFormRemoval({
+        brokerName: req.broker.name,
+        deadline,
+        fallbackUrl,
+        reason: safeError,
+        requestId: req.id,
+        now,
+      });
+      return;
+    }
+
     await prisma.removalRequest.update({
       where: { id: req.id },
       data: {
@@ -266,6 +279,38 @@ async function finalizeFormRemoval(
     },
   });
   await dismissAutomationTasksForRemovalRequest(requestId);
+}
+
+async function finalizeFailedFormRemoval(input: {
+  brokerName: string;
+  deadline: Date;
+  fallbackUrl: string;
+  reason: string;
+  requestId: string;
+  now: Date;
+}): Promise<void> {
+  const blocker = classifyAutomationFailure(input.reason, input.brokerName);
+
+  await prisma.removalRequest.update({
+    where: { id: input.requestId },
+    data: {
+      status: "requires_user_action",
+      removalUrl: input.fallbackUrl,
+      submittedAt: input.now,
+      deadline: input.deadline,
+      lastError: blocker.reason,
+      lastAttemptAt: input.now,
+      attemptCount: { increment: 1 },
+    },
+  });
+
+  await syncAutomationTaskForBlockedForm({
+    removalRequestId: input.requestId,
+    blockerType: blocker.blockerType,
+    reason: blocker.reason,
+    actionUrl: input.fallbackUrl,
+    occurredAt: input.now,
+  });
 }
 
 async function sendDeletionEmail(input: {
