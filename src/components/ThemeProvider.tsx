@@ -61,16 +61,3 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     </ThemeContext.Provider>
   );
 }
-
-/**
- * Inline script injected into <head> to set the theme attribute before
- * first paint — eliminates flash.
- */
-export function ThemeScript() {
-  const script = `(function(){try{var t=localStorage.getItem('nuke-theme');var r=t==='dark'||t==='light'?t:(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',r);}catch(e){}})();`;
-  return (
-    <script
-      dangerouslySetInnerHTML={{ __html: script }}
-    />
-  );
-}

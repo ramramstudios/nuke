@@ -383,49 +383,43 @@ export default function DashboardPage() {
   return (
       <PageContent>
       {showResubmitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
           <div
-            className="w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+            className="w-full max-w-lg border p-5"
             style={{
-              borderColor: "rgba(146,64,14,0.55)",
+              borderColor: "var(--border-2)",
+              borderLeft: "4px solid var(--status-warning)",
               background: "var(--surface)",
             }}
           >
             <div className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#fb923c" }}>
-                  Resubmit Warning
-                </p>
-                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
-                  A removal request was already sent
-                </h2>
-              </div>
+              <h2 className="m-0">A removal request was already sent</h2>
 
-              <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                We already have a pending removal workflow that was submitted at{" "}
-                <span className="font-medium" style={{ color: "var(--text)" }}>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                A pending removal workflow was submitted at{" "}
+                <span className="font-semibold" style={{ color: "var(--text)" }}>
                   {formatDateTime(latestSubmittedAt)}
                 </span>
                 . Sending another batch right now is not advised because it can
                 spam brokers and make the results less effective.
               </p>
 
-              <p className="text-sm leading-6" style={{ color: "var(--text-faint)" }}>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 In the future we plan to block repeat submissions entirely for
                 active requests. If you still want to force another round, you
                 can continue below.
               </p>
 
-              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowResubmitConfirm(false)}
                   disabled={!!actionLoading}
-                  className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 border text-sm disabled:opacity-50"
                   style={{
-                    borderColor: "var(--border)",
+                    borderColor: "var(--border-2)",
                     background: "var(--bg-subtle)",
-                    color: "var(--text-muted)",
+                    color: "var(--text-2)",
                   }}
                 >
                   Cancel
@@ -434,10 +428,10 @@ export default function DashboardPage() {
                   type="button"
                   onClick={handleConfirmResubmit}
                   disabled={!!actionLoading}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
-                  style={{ background: "#ea580c" }}
+                  className="px-3 py-1.5 border text-sm text-white disabled:opacity-50"
+                  style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
                 >
-                  {actionLoading === "remove" ? "Resubmitting…" : "Resubmit Anyway"}
+                  {actionLoading === "remove" ? "Resubmitting…" : "Resubmit anyway"}
                 </button>
               </div>
             </div>
@@ -453,18 +447,18 @@ export default function DashboardPage() {
             <button
               onClick={handleScan}
               disabled={!!actionLoading}
-              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors border"
-              style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+              className="px-3 py-1.5 text-sm font-medium border disabled:opacity-50"
+              style={{ background: "var(--bg-subtle)", borderColor: "var(--border-2)", color: "var(--text-2)" }}
             >
-              {actionLoading === "scan" ? "Scanning…" : "Run Scan"}
+              {actionLoading === "scan" ? "Scanning…" : "Run scan"}
             </button>
             <button
               onClick={handleSubmitRemoval}
               disabled={!!actionLoading}
-              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors text-white"
-              style={{ background: "var(--accent)" }}
+              className="px-3 py-1.5 text-sm font-medium border text-white disabled:opacity-50"
+              style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
             >
-              {actionLoading === "remove" ? "Submitting…" : "Submit Removal"}
+              {actionLoading === "remove" ? "Submitting…" : "Submit removal"}
             </button>
           </>
         }
@@ -472,382 +466,298 @@ export default function DashboardPage() {
 
       {error && <Banner tone="error">{error}</Banner>}
 
-      {/* Summary Cards */}
       {summary && summary.total > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard label="Total Requests" value={summary.total} />
-          <StatCard label="Completed" value={summary.completed} />
-          <StatCard label="Pending Action" value={summary.requiresUserAction} />
-          <StatCard label="Overdue" value={summary.overdue} accent={summary.overdue > 0} />
-        </div>
+        <section>
+          <h2>Summary</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+            <StatCard label="Total requests" value={summary.total} />
+            <StatCard label="Completed" value={summary.completed} />
+            <StatCard label="Pending action" value={summary.requiresUserAction} />
+            <StatCard label="Overdue" value={summary.overdue} accent={summary.overdue > 0} />
+          </div>
+        </section>
       )}
 
       {requests.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Delivery Visibility</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Broker Emails Sent" value={emailedCount} />
-            <StatCard label="Delivery Issues" value={deliveryIssueCount} accent={deliveryIssueCount > 0} />
-            <StatCard label="Manual Fallbacks" value={manualFallbackCount} accent={manualFallbackCount > 0} />
+          <h2>Delivery visibility</h2>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <StatCard label="Broker emails sent" value={emailedCount} />
+            <StatCard label="Delivery issues" value={deliveryIssueCount} accent={deliveryIssueCount > 0} />
+            <StatCard label="Manual fallbacks" value={manualFallbackCount} accent={manualFallbackCount > 0} />
           </div>
         </section>
       )}
 
       {manualFallbackRequests.length > 0 && (
         <section>
-          <div
-            className="rounded-2xl border p-5"
-            style={{
-              borderColor: "rgba(146,64,14,0.55)",
-              background: "rgba(120,53,15,0.15)",
-            }}
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#fb923c" }}>
-                  Manual Follow-Up Needed
-                </p>
-                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
-                  Some brokers could not be contacted automatically
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                  We already tried the email route for these brokers and it failed.
-                  We have switched each one to a direct broker opt-out link so you can
-                  finish the request yourself without leaving the dashboard guessing what
-                  happened next.
-                </p>
-              </div>
-              <div
-                className="rounded-xl border px-4 py-3 text-sm"
-                style={{
-                  borderColor: "rgba(146,64,14,0.55)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "#fdba74",
-                }}
-              >
-                {manualFallbackRequests.length} broker
-                {manualFallbackRequests.length === 1 ? "" : "s"} need manual follow-up
-              </div>
-            </div>
+          <h2>Manual follow-up needed</h2>
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
+            We tried the email route for these brokers and it failed. Each one has been
+            switched to a direct broker opt-out link so you can finish the request
+            yourself.{" "}
+            <span className="status-text status-warning">
+              {manualFallbackRequests.length} broker
+              {manualFallbackRequests.length === 1 ? "" : "s"} affected.
+            </span>
+          </p>
 
-            <div className="mt-5 space-y-4">
-              {manualFallbackRequests.map((req) => {
-                const nextSteps = getManualFallbackSteps(req);
+          <ul className="mt-4 space-y-5 list-none p-0">
+            {manualFallbackRequests.map((req) => {
+              const nextSteps = getManualFallbackSteps(req);
 
-                return (
-                  <article
-                    key={`fallback-${req.id}`}
-                    className="rounded-xl border p-4"
-                    style={{
-                      borderColor: "rgba(146,64,14,0.45)",
-                      background: "rgba(255,255,255,0.03)",
-                    }}
-                  >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
-                          {req.broker.name}
-                        </h3>
-                        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                          {getManualFallbackSummary(req)}
-                        </p>
-                      </div>
-                      {req.removalUrl && (
-                        <a
-                          href={req.removalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
-                          style={{ background: "#ea580c" }}
-                        >
-                          Open broker opt-out page
-                        </a>
-                      )}
+              return (
+                <li
+                  key={`fallback-${req.id}`}
+                  className="border-l-2 pl-4"
+                  style={{ borderColor: "var(--status-warning)" }}
+                >
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="m-0">{req.broker.name}</h3>
+                      <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+                        {getManualFallbackSummary(req)}
+                      </p>
                     </div>
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div
-                        className="rounded-lg border p-4"
-                        style={{
-                          borderColor: "rgba(146,64,14,0.4)",
-                          background: "rgba(120,53,15,0.12)",
-                        }}
+                    {req.removalUrl && (
+                      <a
+                        href={req.removalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium"
+                        style={{ color: "var(--link)" }}
                       >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#fdba74" }}>
-                          What Happened
-                        </p>
-                        <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
-                          {getManualFallbackWhatHappened(req)}
-                        </p>
-                        {req.lastError && (
-                          <p className="mt-3 text-xs leading-5" style={{ color: "#fca5a5" }}>
-                            Last failure: {trimMessage(req.lastError, 220)}
-                          </p>
-                        )}
-                      </div>
+                        Open broker opt-out page →
+                      </a>
+                    )}
+                  </div>
 
-                      <div
-                        className="rounded-lg border p-4"
-                        style={{
-                          borderColor: "rgba(146,64,14,0.4)",
-                          background: "rgba(120,53,15,0.12)",
-                        }}
+                  <div className="mt-3">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      What happened
+                    </p>
+                    <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+                      {getManualFallbackWhatHappened(req)}
+                    </p>
+                    {req.lastError && (
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: "var(--status-danger)" }}
                       >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#fdba74" }}>
-                          What To Do Next
-                        </p>
-                        <ol className="mt-2 space-y-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
-                          {nextSteps.map((step, index) => (
-                            <li key={`${req.id}-step-${index}`}>
-                              <span className="mr-2 font-semibold" style={{ color: "#fdba74" }}>
-                                {index + 1}.
-                              </span>
-                              {step}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
+                        Last failure: {trimMessage(req.lastError, 220)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-3">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      What to do next
+                    </p>
+                    <ol
+                      className="mt-1 ml-5 list-decimal text-sm"
+                      style={{ color: "var(--text-2)" }}
+                    >
+                      {nextSteps.map((step, index) => (
+                        <li key={`${req.id}-step-${index}`}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
       {inboxWatchRequests.length > 0 && (
         <section>
-          <div
-            className="rounded-2xl border p-5"
-            style={{
-              borderColor: "rgba(29,78,216,0.45)",
-              background: "rgba(30,64,175,0.12)",
-            }}
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: "#93c5fd" }}>
-                  Check Your Personal Inbox
-                </p>
-                <h2 className="mt-2 text-2xl font-bold" style={{ color: "var(--text)" }}>
-                  Some broker replies may bypass NUKE
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                  These broker emails were sent with your personal profile address as the
-                  reply target, so identity checks, confirmation links, and completion
-                  notices can arrive there instead of back inside the app.
-                </p>
-                {inboxWatchAddresses.length > 0 && (
-                  <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-2)" }}>
-                    Watch{" "}
-                    <span className="font-medium" style={{ color: "var(--text)" }}>
-                      {inboxWatchAddresses.join(", ")}
-                    </span>{" "}
-                    for broker replies.
-                  </p>
-                )}
-                {loginDiffersFromReplyInbox && user?.email && (
-                  <p className="mt-2 text-xs leading-5" style={{ color: "#bfdbfe" }}>
-                    Your NUKE login email is {user.email}, which is different from the
-                    inbox brokers may be using for follow-up.
-                  </p>
-                )}
-              </div>
-              <div
-                className="rounded-xl border px-4 py-3 text-sm"
-                style={{
-                  borderColor: "rgba(29,78,216,0.45)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "#bfdbfe",
-                }}
-              >
-                {inboxWatchRequests.length} broker
-                {inboxWatchRequests.length === 1 ? "" : "s"} may reply outside the app
-              </div>
-            </div>
+          <h2>Check your personal inbox</h2>
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
+            These broker emails were sent with your personal profile address as the
+            reply target, so identity checks, confirmation links, and completion notices
+            can arrive there instead of inside the app.
+          </p>
+          {inboxWatchAddresses.length > 0 && (
+            <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+              Watch{" "}
+              <span className="font-semibold" style={{ color: "var(--text)" }}>
+                {inboxWatchAddresses.join(", ")}
+              </span>{" "}
+              for broker replies.
+            </p>
+          )}
+          {loginDiffersFromReplyInbox && user?.email && (
+            <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              Your NUKE login email is {user.email}, which is different from the inbox
+              brokers may be using for follow-up.
+            </p>
+          )}
 
-            <div className="mt-5 space-y-4">
-              {inboxWatchRequests.map((req) => {
-                const nextSteps = getPersonalInboxSteps(req);
+          <ul className="mt-4 space-y-5 list-none p-0">
+            {inboxWatchRequests.map((req) => {
+              const nextSteps = getPersonalInboxSteps(req);
 
-                return (
-                  <article
-                    key={`inbox-watch-${req.id}`}
-                    className="rounded-xl border p-4"
-                    style={{
-                      borderColor: "rgba(29,78,216,0.4)",
-                      background: "rgba(255,255,255,0.03)",
-                    }}
-                  >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
-                            {req.broker.name}
-                          </h3>
-                          <StatusBadge status={req.status} />
-                        </div>
-                        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                          {req.sentAt
-                            ? `Broker email sent ${formatDateTime(req.sentAt)}.`
-                            : "Broker email delivery is in progress."}{" "}
-                          Replies may go to{" "}
-                          <span className="font-medium" style={{ color: "var(--text)" }}>
-                            {req.replyToAddress}
-                          </span>
-                          .
-                        </p>
+              return (
+                <li
+                  key={`inbox-watch-${req.id}`}
+                  className="border-l-2 pl-4"
+                  style={{ borderColor: "var(--status-active)" }}
+                >
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="m-0">{req.broker.name}</h3>
+                        <StatusBadge status={req.status} />
                       </div>
-                      <div
-                        className="rounded-lg border px-3 py-2 text-xs"
-                        style={{
-                          borderColor: "rgba(29,78,216,0.4)",
-                          background: "rgba(30,64,175,0.12)",
-                          color: "#bfdbfe",
-                        }}
-                      >
-                        Watch for mail from {getBrokerReplyHint(req)}
-                      </div>
+                      <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+                        {req.sentAt
+                          ? `Broker email sent ${formatDateTime(req.sentAt)}.`
+                          : "Broker email delivery is in progress."}{" "}
+                        Replies may go to{" "}
+                        <span className="font-semibold" style={{ color: "var(--text)" }}>
+                          {req.replyToAddress}
+                        </span>
+                        .
+                      </p>
                     </div>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Watch for mail from {getBrokerReplyHint(req)}
+                    </p>
+                  </div>
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div
-                        className="rounded-lg border p-4"
-                        style={{
-                          borderColor: "rgba(29,78,216,0.35)",
-                          background: "rgba(30,64,175,0.1)",
-                        }}
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
-                          Why This Matters
-                        </p>
-                        <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
-                          If {req.broker.name} asks for identity verification or sends a
-                          confirmation link to your personal inbox, NUKE will not know
-                          about that action until you complete it or route the reply back
-                          into the app later.
-                        </p>
-                      </div>
+                  <div className="mt-3">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Why this matters
+                    </p>
+                    <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+                      If {req.broker.name} asks for identity verification or sends a
+                      confirmation link to your personal inbox, NUKE will not know about
+                      that action until you complete it or route the reply back into the
+                      app later.
+                    </p>
+                  </div>
 
-                      <div
-                        className="rounded-lg border p-4"
-                        style={{
-                          borderColor: "rgba(29,78,216,0.35)",
-                          background: "rgba(30,64,175,0.1)",
-                        }}
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
-                          What To Do Next
-                        </p>
-                        <ol className="mt-2 space-y-2 text-sm leading-6" style={{ color: "var(--text-2)" }}>
-                          {nextSteps.map((step, index) => (
-                            <li key={`${req.id}-inbox-step-${index}`}>
-                              <span className="mr-2 font-semibold" style={{ color: "#93c5fd" }}>
-                                {index + 1}.
-                              </span>
-                              {step}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
+                  <div className="mt-3">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      What to do next
+                    </p>
+                    <ol
+                      className="mt-1 ml-5 list-decimal text-sm"
+                      style={{ color: "var(--text-2)" }}
+                    >
+                      {nextSteps.map((step, index) => (
+                        <li key={`${req.id}-inbox-step-${index}`}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
       {/* Action Required Tasks */}
       {tasks.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Action Required</h2>
-          <div className="space-y-3">
+          <h2>Action required</h2>
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
+            {tasks.length} task{tasks.length === 1 ? "" : "s"} need{tasks.length === 1 ? "s" : ""} your attention.
+          </p>
+          <ul className="mt-4 space-y-4 list-none p-0">
             {tasks.map((task) => (
-              <div
+              <li
                 key={task.id}
-                className="rounded-lg border p-4"
-                style={{
-                  borderColor: "rgba(146,64,14,0.45)",
-                  background: "rgba(120,53,15,0.14)",
-                }}
+                className="border-l-2 pl-4"
+                style={{ borderColor: "var(--status-warning)" }}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium" style={{ color: "#fdba74" }}>{task.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="m-0">{task.title}</h3>
                       <StatusBadge status={task.status} />
                     </div>
-                    <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-muted)" }}>
+                    <p
+                      className="mt-1 text-sm whitespace-pre-line"
+                      style={{ color: "var(--text-2)" }}
+                    >
                       {task.instructions.split("\n\nBroker message excerpt:")[0]}
                     </p>
                     {task.dueAt && (
-                      <p className="mt-2 text-xs" style={{ color: "var(--text-faint)" }}>
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Due: {new Date(task.dueAt).toLocaleDateString()}
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-col gap-1 shrink-0 items-end">
                     {task.actionUrl && (
                       <a
                         href={task.actionUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded px-3 py-1.5 text-center text-xs font-medium text-white transition-colors"
-                        style={{ background: "#ea580c" }}
+                        className="text-xs"
+                        style={{ color: "var(--link)" }}
                       >
-                        Open link
+                        Open link →
                       </a>
                     )}
                     <button
-                        onClick={() => handleTaskAction(task.id, "completed")}
-                        disabled={!!actionLoading}
-                        className="rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 transition-colors"
-                        style={{ background: "rgba(6,95,70,0.35)", color: "#86efac" }}
-                      >
-                        {actionLoading === `task-${task.id}` ? "..." : "Done"}
-                      </button>
+                      onClick={() => handleTaskAction(task.id, "completed")}
+                      disabled={!!actionLoading}
+                      className="text-xs underline disabled:opacity-50"
+                      style={{ color: "var(--status-success)" }}
+                    >
+                      {actionLoading === `task-${task.id}` ? "…" : "Mark done"}
+                    </button>
                     <button
-                        onClick={() => handleTaskAction(task.id, "dismissed")}
-                        disabled={!!actionLoading}
-                        className="rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 transition-colors"
-                        style={{
-                          background: "var(--bg-subtle)",
-                          color: "var(--text-faint)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        Dismiss
-                      </button>
+                      onClick={() => handleTaskAction(task.id, "dismissed")}
+                      disabled={!!actionLoading}
+                      className="text-xs underline disabled:opacity-50"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Dismiss
+                    </button>
                   </div>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
-      {/* Broker Requests Table */}
       {requests.length > 0 && (
         <section>
-          <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Broker Requests</h2>
-          <div className="rounded-lg overflow-x-auto border" style={{ borderColor: "var(--border)" }}>
+          <h2>Broker requests</h2>
+          <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead style={{ background: "var(--surface)", color: "var(--text-muted)" }}>
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium">Broker</th>
-                  <th className="text-left px-4 py-3 font-medium">Category</th>
-                  <th className="text-left px-4 py-3 font-medium">Method</th>
-                  <th className="text-left px-4 py-3 font-medium">Delivery</th>
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium">SLA</th>
-                  <th className="text-left px-4 py-3 font-medium">Action</th>
-                  <th className="text-left px-4 py-3 font-medium">History</th>
+                  <th>Broker</th>
+                  <th>Category</th>
+                  <th>Method</th>
+                  <th>Delivery</th>
+                  <th>Status</th>
+                  <th>SLA</th>
+                  <th>Action</th>
+                  <th>History</th>
                 </tr>
               </thead>
-              <tbody style={{ borderTop: "1px solid var(--border)" }}>
+              <tbody>
                 {requests.map((req) => {
                   const delivery = getDeliveryView(req);
                   const isOpen = openTimeline === req.id;
@@ -855,118 +765,130 @@ export default function DashboardPage() {
 
                   return (
                     <Fragment key={req.id}>
-                      <tr
-                        key={req.id}
-                        className="align-top"
-                        style={{ borderBottom: "1px solid var(--border)" }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
-                      >
-                        <td className="px-4 py-3">
-                          <div className="font-medium" style={{ color: "var(--text)" }}>{req.broker.name}</div>
-                          <div className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>{req.broker.domain}</div>
+                      <tr key={req.id}>
+                        <td>
+                          <div className="font-semibold" style={{ color: "var(--text)" }}>
+                            {req.broker.name}
+                          </div>
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {req.broker.domain}
+                          </div>
                         </td>
-                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>
+                        <td style={{ color: "var(--text-2)" }}>
                           {req.broker.category.replace(/_/g, " ")}
                         </td>
-                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{req.method.replace(/_/g, " ")}</td>
-                        <td className="px-4 py-3">
-                          <div className="min-w-[18rem]">
+                        <td style={{ color: "var(--text-2)" }}>
+                          {req.method.replace(/_/g, " ")}
+                        </td>
+                        <td>
+                          <div className="min-w-[16rem]">
                             <p className="font-medium" style={{ color: delivery.titleColor }}>
                               {delivery.title}
                             </p>
-                            <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>{delivery.detail}</p>
+                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                              {delivery.detail}
+                            </p>
                             {delivery.failure && (
-                              <p className="mt-2 text-xs" style={{ color: "#fca5a5" }}>
+                              <p
+                                className="mt-1 text-xs"
+                                style={{ color: "var(--status-danger)" }}
+                              >
                                 Last failure: {delivery.failure}
                               </p>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td>
                           <StatusBadge status={req.status} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td>
                           <SLACountdown deadline={req.deadline} />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex min-w-[14rem] flex-col gap-2">
+                        <td>
+                          <div className="flex min-w-[14rem] flex-col gap-1">
                             {(req.status === "requires_user_action" || req.method === "manual_link") &&
                               req.removalUrl && (
                                 <a
                                   href={req.removalUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-red-400 hover:text-red-300 underline text-xs"
+                                  className="text-xs"
+                                  style={{ color: "var(--link)" }}
                                 >
                                   {isFormActionRequired(req)
                                     ? getFormActionLinkLabel(req)
                                     : isManualFallback(req)
-                                    ? "Open broker opt-out page →"
-                                    : "Open opt-out link →"}
+                                      ? "Open broker opt-out page →"
+                                      : "Open opt-out link →"}
                                 </a>
                               )}
                             {isManualFallback(req) ? (
-                              <p className="text-xs text-orange-300">
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--status-warning)" }}
+                              >
                                 Next: open the broker page, complete their opt-out flow,
                                 and then check back here for any follow-up tasks.
                               </p>
                             ) : isFormActionRequired(req) ? (
-                              <p className="text-xs text-blue-200">
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--status-active)" }}
+                              >
                                 {getFormActionHelpText(req)}
                               </p>
                             ) : shouldMonitorPersonalInbox(req) ? (
-                              <p className="text-xs text-blue-200">
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--status-active)" }}
+                              >
                                 Watch {req.replyToAddress} for replies or verification
                                 steps from {getBrokerReplyHint(req)}.
                               </p>
                             ) : req.sentAt ? (
-                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                                 No action needed unless the broker asks for more information.
                               </p>
                             ) : req.method === "manual_link" ? (
-                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                                 Use the direct broker link to complete this opt-out.
                               </p>
                             ) : (
-                              <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                                 Delivery is being tracked automatically.
                               </p>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td>
                           <button
                             type="button"
                             aria-expanded={isOpen}
                             aria-controls={panelId}
                             onClick={() => handleToggleTimeline(req.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border"
-                            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+                            className="text-xs underline"
+                            style={{ color: "var(--link)" }}
                           >
-                            <span>{isOpen ? "Hide" : "Show"} timeline</span>
-                            <span aria-hidden="true">{isOpen ? "▲" : "▼"}</span>
+                            {isOpen ? "Hide" : "Show"} timeline
                           </button>
                         </td>
                       </tr>
 
                       {isOpen && (
                         <tr key={`${req.id}-timeline`}>
-                          <td colSpan={8} className="px-0 py-0">
-                            <div
-                              id={panelId}
-                              className="px-6 py-5 border-t"
-                              style={{ borderColor: "var(--border)", background: "var(--bg-subtle)" }}
-                            >
-                              <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-2)" }}>
+                          <td colSpan={8} style={{ background: "var(--bg-subtle)" }}>
+                            <div id={panelId} className="px-2 py-3">
+                              <h3 className="m-0 text-sm font-semibold">
                                 Communication timeline — {req.broker.name}
                               </h3>
-                              <TimelinePanel
-                                requestId={req.id}
-                                events={timelineData[req.id] ?? null}
-                                loading={timelineLoading === req.id}
-                                error={timelineError[req.id] ?? null}
-                              />
+                              <div className="mt-2">
+                                <TimelinePanel
+                                  requestId={req.id}
+                                  events={timelineData[req.id] ?? null}
+                                  loading={timelineLoading === req.id}
+                                  error={timelineError[req.id] ?? null}
+                                />
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -980,54 +902,68 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {/* Custom Requests */}
       <section>
-        <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Custom Removal Request</h2>
-        <form onSubmit={handleCustomRequest} className="flex gap-3 mb-4">
+        <h2>Custom removal request</h2>
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>
+          Found a page with your data that isn&apos;t in the broker registry? Paste the
+          URL and we&apos;ll add it to your queue.
+        </p>
+        <form onSubmit={handleCustomRequest} className="mt-3 flex gap-2">
           <input
             type="url"
             placeholder="https://example.com/your-listing"
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
             required
-            className="flex-1 px-4 py-2 rounded-lg text-sm"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            className="flex-1 px-3 py-1.5 text-sm border"
+            style={{
+              background: "var(--bg)",
+              borderColor: "var(--border-2)",
+              color: "var(--text)",
+            }}
           />
           <button
             type="submit"
             disabled={!!actionLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors border"
-            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-2)" }}
+            className="px-3 py-1.5 text-sm font-medium border disabled:opacity-50"
+            style={{
+              background: "var(--bg-subtle)",
+              borderColor: "var(--border-2)",
+              color: "var(--text-2)",
+            }}
           >
-            {actionLoading === "custom" ? "Adding…" : "Add Request"}
+            {actionLoading === "custom" ? "Adding…" : "Add request"}
           </button>
         </form>
 
         {customRequests.length > 0 && (
-          <div className="space-y-2">
+          <ul className="mt-4 space-y-2 list-none p-0">
             {customRequests.map((cr) => (
-              <div
+              <li
                 key={cr.id}
-                className="flex items-center justify-between rounded-lg px-4 py-3 text-sm border"
-                style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                className="flex items-center justify-between gap-3 text-sm py-2"
+                style={{ borderBottom: "1px solid var(--border)" }}
               >
-                <div className="truncate flex-1 mr-4">{cr.targetUrl}</div>
-                <div className="flex items-center gap-3">
+                <div className="truncate flex-1" style={{ color: "var(--text-2)" }}>
+                  {cr.targetUrl}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge status={cr.status} />
                   {cr.removalUrl && (
                     <a
                       href={cr.removalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-red-400 hover:text-red-300 underline text-xs"
+                      className="text-xs"
+                      style={{ color: "var(--link)" }}
                     >
                       Remove →
                     </a>
                   )}
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </section>
 
@@ -1173,7 +1109,7 @@ function TimelineEventMeta({ event }: { event: TimelineEvent }) {
 function MetaChip({ label, value }: { label: string; value: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs border"
+      className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs border"
       style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
     >
       <span style={{ color: "var(--text-faint)" }}>{label}:</span> {value}
@@ -1184,13 +1120,13 @@ function MetaChip({ label, value }: { label: string; value: string }) {
 function toneDotStyle(tone: TimelineTone): { borderColor: string; background: string } {
   switch (tone) {
     case "success":
-      return { borderColor: "#22c55e", background: "rgba(22,101,52,0.45)" };
+      return { borderColor: "var(--status-success)", background: "var(--surface)" };
     case "warning":
-      return { borderColor: "#f97316", background: "rgba(154,52,18,0.4)" };
+      return { borderColor: "var(--status-warning)", background: "var(--surface)" };
     case "danger":
-      return { borderColor: "#ef4444", background: "rgba(153,27,27,0.4)" };
+      return { borderColor: "var(--status-danger)", background: "var(--surface)" };
     case "info":
-      return { borderColor: "#3b82f6", background: "rgba(30,64,175,0.35)" };
+      return { borderColor: "var(--status-active)", background: "var(--surface)" };
     default:
       return { borderColor: "var(--border-2)", background: "var(--surface-2)" };
   }
@@ -1199,13 +1135,13 @@ function toneDotStyle(tone: TimelineTone): { borderColor: string; background: st
 function toneTitleColor(tone: TimelineTone): string {
   switch (tone) {
     case "success":
-      return "#86efac";
+      return "var(--status-success)";
     case "warning":
-      return "#fdba74";
+      return "var(--status-warning)";
     case "danger":
-      return "#fca5a5";
+      return "var(--status-danger)";
     case "info":
-      return "#93c5fd";
+      return "var(--status-active)";
     default:
       return "var(--text-2)";
   }
@@ -1305,7 +1241,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: getFormActionTitle(req),
       detail: getFormActionDetail(req, attemptedAt),
       failure: req.lastError ? trimMessage(req.lastError) : null,
-      titleColor: "#93c5fd",
+      titleColor: "var(--status-active)",
     };
   }
 
@@ -1319,7 +1255,7 @@ function getDeliveryView(req: RemovalRequest): {
           ? `Last delivery attempt ran on ${formatDateTime(attemptedAt)}. A manual broker link is ready instead.`
           : "Email delivery failed and the request fell back to a manual broker link.",
         failure: trimMessage(req.lastError),
-        titleColor: "#fdba74",
+        titleColor: "var(--status-warning)",
       };
     }
 
@@ -1329,7 +1265,7 @@ function getDeliveryView(req: RemovalRequest): {
         ? `The last delivery attempt was recorded on ${formatDateTime(attemptedAt)}.`
         : "A broker delivery attempt failed and may need another retry.",
       failure: trimMessage(req.lastError),
-      titleColor: "#fca5a5",
+      titleColor: "var(--status-danger)",
     };
   }
 
@@ -1340,7 +1276,7 @@ function getDeliveryView(req: RemovalRequest): {
         ? `Sent ${formatDateTime(req.sentAt)}. Provider id: ${shortId(req.providerMessageId)}`
         : `Sent ${formatDateTime(req.sentAt)}.`,
       failure: null,
-      titleColor: "#93c5fd",
+      titleColor: "var(--status-active)",
     };
   }
 
@@ -1349,7 +1285,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: "Broker form submitted",
       detail: `Form workflow ran on ${formatDateTime(req.submittedAt)}.`,
       failure: null,
-      titleColor: "#93c5fd",
+      titleColor: "var(--status-active)",
     };
   }
 
@@ -1358,7 +1294,7 @@ function getDeliveryView(req: RemovalRequest): {
       title: "Manual link generated",
       detail: "This broker currently relies on a direct manual opt-out link instead of outbound email.",
       failure: null,
-      titleColor: "#fdba74",
+      titleColor: "var(--status-warning)",
     };
   }
 

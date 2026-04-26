@@ -1,18 +1,23 @@
 /**
- * Lightweight shared UI primitives for the dashboard surfaces.
- * All components use CSS variables so they adapt to both dark and light themes.
+ * Shared UI primitives. Visual style follows Wikipedia/serverless-docs:
+ * one column of plain content, thin borders, no surface-on-surface stacking,
+ * and no gradient/tinted decoration. Status color lives on text, not pills.
  */
 
 import type { ReactNode } from "react";
 
 /* ─── Page shell ─────────────────────────────────────────────────────────── */
 
-export function PageContent({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+export function PageContent({
+  children,
+  wide = false,
+}: {
+  children: ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <main
-      className={`flex-1 w-full mx-auto px-4 sm:px-6 py-8 space-y-8 ${wide ? "max-w-7xl" : "max-w-6xl"}`}
-    >
-      {children}
+    <main className={`prose-page ${wide ? "prose-page--wide" : ""} flex-1 w-full`}>
+      <div className="space-y-8">{children}</div>
     </main>
   );
 }
@@ -31,52 +36,73 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: "var(--text)" }}>
-          {title}
-        </h1>
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="m-0">{title}</h1>
         {subtitle && (
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
             {subtitle}
           </p>
         )}
         {detail && (
-          <p className="mt-1.5 text-xs" style={{ color: "var(--text-faint)" }}>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             {detail}
           </p>
         )}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-    </div>
+      {actions && (
+        <div className="flex flex-wrap gap-2 self-end">{actions}</div>
+      )}
+    </header>
   );
 }
 
-/* ─── Error / feedback banners ───────────────────────────────────────────── */
+/* ─── Inline status / feedback notice ────────────────────────────────────── */
 
 type BannerTone = "error" | "warning" | "success" | "info";
 
-const BANNER_STYLES: Record<BannerTone, { bg: string; border: string; text: string }> = {
-  error:   { bg: "rgba(127,29,29,0.15)",  border: "rgba(153,27,27,0.5)",  text: "#fca5a5" },
-  warning: { bg: "rgba(120,53,15,0.15)",  border: "rgba(146,64,14,0.5)",  text: "#fcd34d" },
-  success: { bg: "rgba(6,78,59,0.15)",    border: "rgba(6,95,70,0.5)",    text: "#6ee7b7" },
-  info:    { bg: "rgba(30,58,138,0.15)",  border: "rgba(30,64,175,0.5)",  text: "#93c5fd" },
+const BANNER_TEXT: Record<BannerTone, string> = {
+  error: "var(--status-danger)",
+  warning: "var(--status-warning)",
+  success: "var(--status-success)",
+  info: "var(--status-active)",
 };
 
-export function Banner({ tone = "error", children }: { tone?: BannerTone; children: ReactNode }) {
-  const s = BANNER_STYLES[tone];
+export function Banner({
+  tone = "error",
+  children,
+}: {
+  tone?: BannerTone;
+  children: ReactNode;
+}) {
   return (
     <div
       role="alert"
-      className="rounded-xl px-4 py-3 text-sm border"
-      style={{ background: s.bg, borderColor: s.border, color: s.text }}
+      className="border-l-4 pl-3 py-2 text-sm"
+      style={{
+        borderColor: BANNER_TEXT[tone],
+        background: "var(--bg-subtle)",
+        color: "var(--text-2)",
+      }}
     >
+      <span
+        className="font-semibold mr-2"
+        style={{ color: BANNER_TEXT[tone] }}
+      >
+        {tone === "error"
+          ? "Error:"
+          : tone === "warning"
+            ? "Note:"
+            : tone === "success"
+              ? "Done:"
+              : "Info:"}
+      </span>
       {children}
     </div>
   );
 }
 
-/* ─── Stat / metric card ─────────────────────────────────────────────────── */
+/* ─── Stat — compact plain row ───────────────────────────────────────────── */
 
 export function StatCard({
   label,
@@ -87,27 +113,26 @@ export function StatCard({
   label: string;
   value: string | number;
   accent?: boolean;
+  /** Kept for back-compat; the new style is already compact. */
   compact?: boolean;
 }) {
+  void compact;
   return (
-    <div
-      className="rounded-xl border p-4"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
+    <div className="py-1">
       <div
-        className={compact ? "text-sm font-semibold" : "text-2xl font-bold"}
+        className="text-xl font-semibold"
         style={{ color: accent ? "var(--accent)" : "var(--text)" }}
       >
         {value}
       </div>
-      <div className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+      <div className="text-xs" style={{ color: "var(--text-muted)" }}>
         {label}
       </div>
     </div>
   );
 }
 
-/* ─── Section card ───────────────────────────────────────────────────────── */
+/* ─── Section — a heading + a body, no card ──────────────────────────────── */
 
 export function SectionCard({
   title,
@@ -119,34 +144,16 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section
-      className={`rounded-xl border ${className}`}
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
-      {title && (
-        <div
-          className="px-5 py-3 border-b text-xs font-semibold uppercase tracking-widest"
-          style={{ borderColor: "var(--border)", color: "var(--text-faint)" }}
-        >
-          {title}
-        </div>
-      )}
-      <div className="p-5">{children}</div>
+    <section className={className}>
+      {title && <h2>{title}</h2>}
+      <div>{children}</div>
     </section>
   );
 }
 
-/* ─── Button variants ────────────────────────────────────────────────────── */
+/* ─── Button ─────────────────────────────────────────────────────────────── */
 
 type ButtonTone = "primary" | "secondary" | "danger" | "warning" | "neutral";
-
-const BTN: Record<ButtonTone, { bg: string; hover: string; text: string; border?: string }> = {
-  primary:   { bg: "var(--accent)",    hover: "var(--accent-hover)", text: "#fff" },
-  secondary: { bg: "var(--surface)",   hover: "var(--surface-2)",    text: "var(--text-2)", border: "var(--border)" },
-  danger:    { bg: "var(--accent)",    hover: "var(--accent-hover)", text: "#fff" },
-  warning:   { bg: "rgba(120,53,15,0.4)", hover: "rgba(146,64,14,0.5)", text: "#fcd34d", border: "rgba(146,64,14,0.6)" },
-  neutral:   { bg: "var(--surface-2)", hover: "var(--border)",       text: "var(--text-muted)", border: "var(--border)" },
-};
 
 export function Btn({
   tone = "secondary",
@@ -165,24 +172,32 @@ export function Btn({
   type?: "button" | "submit" | "reset";
   className?: string;
 }) {
-  const s = BTN[tone];
+  const isPrimary = tone === "primary" || tone === "danger";
+  const isWarning = tone === "warning";
+
+  const background = isPrimary
+    ? "var(--accent)"
+    : isWarning
+      ? "var(--bg-subtle)"
+      : "var(--bg-subtle)";
+  const color = isPrimary
+    ? "#ffffff"
+    : isWarning
+      ? "var(--status-warning)"
+      : "var(--text-2)";
+  const borderColor = isPrimary
+    ? "var(--accent)"
+    : isWarning
+      ? "var(--status-warning)"
+      : "var(--border-2)";
+
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 border ${className}`}
-      style={{
-        background: s.bg,
-        color: s.text,
-        borderColor: s.border ?? "transparent",
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled && !loading) (e.currentTarget as HTMLElement).style.background = s.hover;
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled && !loading) (e.currentTarget as HTMLElement).style.background = s.bg;
-      }}
+      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium border disabled:opacity-50 ${className}`}
+      style={{ background, color, borderColor }}
     >
       {loading ? "Working…" : children}
     </button>
@@ -194,24 +209,30 @@ export function Btn({
 export function LoadingScreen({ message = "Loading…" }: { message?: string }) {
   return (
     <main className="flex-1 flex items-center justify-center">
-      <p style={{ color: "var(--text-faint)" }}>{message}</p>
+      <p style={{ color: "var(--text-muted)" }}>{message}</p>
     </main>
   );
 }
 
 /* ─── Empty state ────────────────────────────────────────────────────────── */
 
-export function EmptyState({ title, body }: { title: string; body?: string }) {
+export function EmptyState({
+  title,
+  body,
+}: {
+  title: string;
+  body?: string;
+}) {
   return (
     <div
-      className="rounded-xl border border-dashed px-6 py-16 text-center"
+      className="border-l-2 pl-4 py-2"
       style={{ borderColor: "var(--border-2)" }}
     >
-      <p className="text-base font-medium" style={{ color: "var(--text-2)" }}>
+      <p className="text-sm font-medium" style={{ color: "var(--text-2)" }}>
         {title}
       </p>
       {body && (
-        <p className="mt-2 text-sm" style={{ color: "var(--text-faint)" }}>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
           {body}
         </p>
       )}
