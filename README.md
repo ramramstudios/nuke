@@ -18,6 +18,7 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Offers a managed-service pilot package with saved enrollment state, seat limits, manual-invoice billing, and dashboard-visible support checkpoints for human follow-up handling.
 - Includes a Playwright form-automation foundation with reusable browser-session helpers, artifact capture, and a form-foundation smoke test.
 - Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state, including CAPTCHA, bot-check, rate-limit, email-confirmation, identity-verification, profile-URL, and record-selection blockers.
+- Persists form-automation evidence for support review, including run IDs, artifact directories, screenshots, logs, metadata, trace paths, final URLs, blocker reasons, and timeline-visible evidence events.
 
 What is still limited today:
 
@@ -447,7 +448,7 @@ This is a prototype focused on architecture, not production readiness:
 
 - **Scan results are simulated** — random probability based on broker category
 - **API removal methods are still stubbed** — no real HTTP calls yet
-- **Broker-specific Playwright form flows are assisted, not universally end-to-end** — the browser foundation, env knobs, artifact capture, and named broker runners exist for the first priority waves, but live CAPTCHA, bot-check, and email-confirmation gates still route to user or operator chores
+- **Broker-specific Playwright form flows are assisted, not universally end-to-end** — the browser foundation, env knobs, persisted artifact evidence, and named broker runners exist for the first priority waves, but live CAPTCHA, bot-check, and email-confirmation gates still route to user or operator chores
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
 - **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
@@ -467,6 +468,7 @@ This is a prototype focused on architecture, not production readiness:
 ### Near-term
 - [x] Playwright form automation foundation and smoke path
 - [x] Broker-specific assisted Playwright automation for the first priority waves with challenge-aware handoffs
+- [x] Persisted assisted-automation evidence for timeline and support review
 - [x] Real email sending via Resend or Gmail SMTP
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ for async job processing

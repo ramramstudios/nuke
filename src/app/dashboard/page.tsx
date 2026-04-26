@@ -1123,6 +1123,24 @@ function TimelineEventMeta({ event }: { event: TimelineEvent }) {
   if (m.providerMessageId) {
     chips.push({ label: "Provider ID", value: shortId(m.providerMessageId) });
   }
+  if (m.evidenceRunId) {
+    chips.push({ label: "Run", value: shortId(m.evidenceRunId) });
+  }
+  if (m.evidenceRunStatus) {
+    chips.push({ label: "Run status", value: m.evidenceRunStatus.replace(/_/g, " ") });
+  }
+  if (m.blockerType) {
+    chips.push({ label: "Blocker", value: m.blockerType.replace(/_/g, " ") });
+  }
+  if (m.screenshotCount != null) {
+    chips.push({ label: "Screenshots", value: String(m.screenshotCount) });
+  }
+  if (m.runDir) {
+    chips.push({ label: "Artifacts", value: trimMessage(m.runDir, 80) });
+  }
+  if (m.logPath) {
+    chips.push({ label: "Log", value: trimMessage(m.logPath, 80) });
+  }
   if (m.actionUrl) {
     return (
       <div className="mt-2 flex flex-wrap gap-2">

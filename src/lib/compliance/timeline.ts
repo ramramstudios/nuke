@@ -16,6 +16,7 @@ export type TimelineEventType =
   | "submitted"
   | "email_sent"
   | "watch_inbox"
+  | "automation_evidence"
   | "retry_sent"
   | "retry_failed"
   | "escalated"
@@ -50,6 +51,15 @@ export interface TimelineEvent {
     retryStage?: number;
     replyToAddress?: string;
     excerpt?: string;
+    evidenceRunId?: string;
+    evidenceRunStatus?: string;
+    evidenceOutcomeStatus?: string;
+    blockerType?: string;
+    screenshotCount?: number;
+    runDir?: string;
+    logPath?: string;
+    metadataPath?: string;
+    tracePath?: string;
   };
 }
 
@@ -72,6 +82,7 @@ export async function getRequestTimeline(
         select: { payloadSnapshot: true },
       },
       retryAttempts: { orderBy: { attemptedAt: "asc" } },
+      automationEvidence: { orderBy: { capturedAt: "asc" } },
       inboundMessages: { orderBy: { receivedAt: "asc" } },
       tasks: { orderBy: { createdAt: "asc" } },
     },
@@ -128,7 +139,36 @@ export async function getRequestTimeline(
     }
   }
 
-  // ── 3. Manual fallback switch ────────────────────────────────────────────
+  // ── 3. Automation evidence ──────────────────────────────────────────────
+  for (const evidence of request.automationEvidence) {
+    events.push({
+      id: `automation-evidence-${evidence.id}`,
+      type: "automation_evidence",
+      occurredAt: evidence.finishedAt.toISOString(),
+      title:
+        evidence.outcomeStatus === "submitted"
+          ? "Automation evidence captured"
+          : "Assisted handoff evidence captured",
+      description: buildEvidenceDescription(evidence),
+      tone: evidence.outcomeStatus === "submitted" ? "info" : "warning",
+      metadata: {
+        brokerName,
+        evidenceRunId: evidence.runId,
+        evidenceRunStatus: evidence.runStatus,
+        evidenceOutcomeStatus: evidence.outcomeStatus,
+        blockerType: evidence.blockerType ?? undefined,
+        failureReason: evidence.reason ?? undefined,
+        actionUrl: evidence.actionUrl ?? evidence.finalUrl ?? undefined,
+        screenshotCount: evidence.screenshotCount,
+        runDir: evidence.runDir,
+        logPath: evidence.logPath ?? undefined,
+        metadataPath: evidence.metadataPath ?? undefined,
+        tracePath: evidence.tracePath ?? undefined,
+      },
+    });
+  }
+
+  // ── 4. Manual fallback switch ────────────────────────────────────────────
   if (method === "manual_link" && request.lastError) {
     const occurredAt = (request.lastAttemptAt ?? request.updatedAt).toISOString();
     events.push({
@@ -145,7 +185,7 @@ export async function getRequestTimeline(
     });
   }
 
-  // ── 4. Retry attempts ────────────────────────────────────────────────────
+  // ── 5. Retry attempts ────────────────────────────────────────────────────
   for (const attempt of request.retryAttempts) {
     if (attempt.outcome === "sent") {
       events.push({
@@ -193,7 +233,7 @@ export async function getRequestTimeline(
     }
   }
 
-  // ── 5. Escalation milestone (from request fields, if not covered above) ──
+  // ── 6. Escalation milestone (from request fields, if not covered above) ──
   if (
     request.escalatedAt &&
     !request.retryAttempts.some((a) => a.outcome === "escalated")
@@ -212,7 +252,7 @@ export async function getRequestTimeline(
     });
   }
 
-  // ── 6. Inbound broker replies ────────────────────────────────────────────
+  // ── 7. Inbound broker replies ────────────────────────────────────────────
   for (const msg of request.inboundMessages) {
     if (msg.provider === "automation") {
       continue;
@@ -243,7 +283,7 @@ export async function getRequestTimeline(
     });
   }
 
-  // ── 7. User tasks ────────────────────────────────────────────────────────
+  // ── 8. User tasks ────────────────────────────────────────────────────────
   for (const task of request.tasks) {
     events.push({
       id: `task-created-${task.id}`,
@@ -278,7 +318,7 @@ export async function getRequestTimeline(
     }
   }
 
-  // ── 8. Status milestones ─────────────────────────────────────────────────
+  // ── 9. Status milestones ─────────────────────────────────────────────────
   if (request.acknowledgedAt) {
     events.push({
       id: `${request.id}-acknowledged`,
@@ -396,6 +436,30 @@ function classificationTitle(classification: string, brokerName: string): string
   }
 }
 
+function buildEvidenceDescription(evidence: {
+  blockerType: string | null;
+  brokerName: string;
+  outcomeStatus: string;
+  reason: string | null;
+  runStatus: string;
+  screenshotCount: number;
+}): string {
+  const screenshots =
+    evidence.screenshotCount === 1
+      ? "1 screenshot"
+      : `${evidence.screenshotCount} screenshots`;
+  const blocker = evidence.blockerType
+    ? ` Blocker: ${evidence.blockerType.replace(/_/g, " ")}.`
+    : "";
+  const reason = evidence.reason ? ` ${trimMessage(evidence.reason, 140)}` : "";
+
+  if (evidence.outcomeStatus === "submitted") {
+    return `NUKE captured ${screenshots}, logs, and metadata for the automated ${evidence.brokerName} form run.`;
+  }
+
+  return `NUKE captured ${screenshots}, logs, and metadata before handing off the ${evidence.brokerName} broker step.${blocker}${reason}`;
+}
+
 function buildExcerpt(body: string, maxLength = 160): string {
   // Strip HTML tags if present
   const text = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -409,6 +473,11 @@ function shortInstructions(instructions: string, maxLength = 200): string {
   const trimmed = instructions.split("\n\nBroker message excerpt:")[0].trim();
   if (trimmed.length <= maxLength) return trimmed;
   return `${trimmed.slice(0, maxLength - 1)}…`;
+}
+
+function trimMessage(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
 }
 
 function getReplyToAddress(payloadSnapshot: string): string | null {

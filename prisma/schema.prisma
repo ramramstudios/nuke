@@ -10,60 +10,60 @@ datasource db {
 // ─── Users & Auth ────────────────────────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  verified      Boolean  @default(false)
-  verifyToken   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  verified     Boolean  @default(false)
+  verifyToken  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  profile       UserProfile?
-  deletionRequests DeletionRequest[]
-  customRequests   CustomRequest[]
-  scans            Scan[]
-  tasks            UserTask[]
+  profile                   UserProfile?
+  deletionRequests          DeletionRequest[]
+  customRequests            CustomRequest[]
+  scans                     Scan[]
+  tasks                     UserTask[]
   managedServiceEnrollments ManagedServiceEnrollment[]
 }
 
 // PII fields stored as encrypted JSON blobs
 model UserProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Encrypted blobs — decrypted at runtime
-  fullNames       String   // encrypted JSON array: ["John Doe", "J. Doe"]
-  emails          String   // encrypted JSON array
-  phones          String   // encrypted JSON array
-  addresses       String   // encrypted JSON array of {street, city, state, zip}
+  fullNames String // encrypted JSON array: ["John Doe", "J. Doe"]
+  emails    String // encrypted JSON array
+  phones    String // encrypted JSON array
+  addresses String // encrypted JSON array of {street, city, state, zip}
 
   // Optional identifiers
-  advertisingIds  String?  // encrypted JSON array
-  vin             String?  // encrypted
+  advertisingIds String? // encrypted JSON array
+  vin            String? // encrypted
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Brokers ─────────────────────────────────────────────────
 
 model Broker {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  domain          String
-  category        String   // people_search | marketing | analytics | data_broker | other
-  searchMethod    String   // url_pattern | api | scrape
-  removalMethod   String   // api | form | email | manual_link
-  removalEndpoint String?  // URL, email address, or API endpoint
-  slaInDays       Int      @default(45)
-  tier            Int      @default(1) // 1 = automated MVP, 2 = extensible
-  priority        String   @default("standard") // critical | high | standard
-  active          Boolean  @default(true)
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  domain             String
+  category           String // people_search | marketing | analytics | data_broker | other
+  searchMethod       String // url_pattern | api | scrape
+  removalMethod      String // api | form | email | manual_link
+  removalEndpoint    String? // URL, email address, or API endpoint
+  slaInDays          Int      @default(45)
+  tier               Int      @default(1) // 1 = automated MVP, 2 = extensible
+  priority           String   @default("standard") // critical | high | standard
+  active             Boolean  @default(true)
   optOutInstructions String?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   requests        RemovalRequest[]
   exposures       Exposure[]
@@ -74,37 +74,37 @@ model Broker {
 // ─── Unified Deletion Requests (DROP-style) ─────────────────
 
 model DeletionRequest {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Snapshot of user data at submission time (encrypted)
   payloadSnapshot String
 
-  status          String   @default("pending") // pending | dispatching | active | completed
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status    String   @default("pending") // pending | dispatching | active | completed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  removalRequests  RemovalRequest[]
-  inboundMessages  InboundMessage[]
-  tasks            UserTask[]
+  removalRequests RemovalRequest[]
+  inboundMessages InboundMessage[]
+  tasks           UserTask[]
 }
 
 // ─── Per-Broker Removal Requests ────────────────────────────
 
 model RemovalRequest {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   deletionRequestId String
   deletionRequest   DeletionRequest @relation(fields: [deletionRequestId], references: [id], onDelete: Cascade)
 
-  brokerId          String
-  broker            Broker   @relation(fields: [brokerId], references: [id])
+  brokerId String
+  broker   Broker @relation(fields: [brokerId], references: [id])
 
-  method            String   // api | form | email | manual_link
-  status            String   @default("pending")
+  method String // api | form | email | manual_link
+  status String @default("pending")
   // pending | submitted | requires_user_action | acknowledged | completed | rejected
 
-  removalUrl        String?  // for manual_link fallback
+  removalUrl        String? // for manual_link fallback
   rejectionReason   String?
   submittedAt       DateTime?
   sentAt            DateTime?
@@ -114,200 +114,233 @@ model RemovalRequest {
   providerMessageId String?
   outboundMessageId String?
   lastError         String?
-  attemptCount      Int      @default(0)
+  attemptCount      Int       @default(0)
   lastAttemptAt     DateTime?
 
   // Retry policy tracking (Phase 2, chunk 5)
-  retryStage        Int      @default(0) // 0=initial send, 1=first follow-up, 2=second follow-up, 3+=escalated
-  nextRetryAt       DateTime?
-  lastRetryReason   String?
-  escalatedAt       DateTime?
-  escalationReason  String?
+  retryStage       Int       @default(0) // 0=initial send, 1=first follow-up, 2=second follow-up, 3+=escalated
+  nextRetryAt      DateTime?
+  lastRetryReason  String?
+  escalatedAt      DateTime?
+  escalationReason String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  inboundMessages   InboundMessage[]
-  retryAttempts     RemovalRetryAttempt[]
-  tasks             UserTask[]
+  inboundMessages    InboundMessage[]
+  retryAttempts      RemovalRetryAttempt[]
+  tasks              UserTask[]
+  automationEvidence AutomationEvidence[]
+}
+
+model AutomationEvidence {
+  id               String         @id @default(cuid())
+  removalRequestId String
+  removalRequest   RemovalRequest @relation(fields: [removalRequestId], references: [id], onDelete: Cascade)
+
+  kind          String  @default("form_automation")
+  runId         String  @unique
+  runStatus     String
+  outcomeStatus String
+  blockerType   String?
+  reason        String?
+  actionUrl     String?
+
+  brokerName   String
+  brokerDomain String
+  entryUrl     String
+  finalUrl     String?
+  pageTitle    String?
+
+  runDir          String
+  screenshotCount Int     @default(0)
+  screenshots     String // JSON array of artifact paths
+  logPath         String?
+  metadataPath    String?
+  tracePath       String?
+  logEntries      Int     @default(0)
+
+  startedAt  DateTime
+  finishedAt DateTime
+  capturedAt DateTime @default(now())
 }
 
 model RemovalRetryAttempt {
-  id                String   @id @default(cuid())
-  removalRequestId  String
-  removalRequest    RemovalRequest @relation(fields: [removalRequestId], references: [id], onDelete: Cascade)
+  id               String         @id @default(cuid())
+  removalRequestId String
+  removalRequest   RemovalRequest @relation(fields: [removalRequestId], references: [id], onDelete: Cascade)
 
   stage             Int
-  action            String   // follow_up | escalate
-  outcome           String   // sent | failed | escalated
+  action            String // follow_up | escalate
+  outcome           String // sent | failed | escalated
   reason            String
   providerMessageId String?
   outboundMessageId String?
   error             String?
-  attemptedAt       DateTime @default(now())
+  attemptedAt       DateTime  @default(now())
   nextRetryAt       DateTime?
 }
 
 // ─── Scans & Exposure Detection ─────────────────────────────
 
 model Scan {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status    String   @default("pending") // pending | running | completed | failed
-  startedAt DateTime?
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String    @default("pending") // pending | running | completed | failed
+  startedAt   DateTime?
   completedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   exposures Exposure[]
 }
 
 model Exposure {
-  id          String   @id @default(cuid())
-  scanId      String
-  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  scanId String
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
-  brokerId    String?
-  broker      Broker?  @relation(fields: [brokerId], references: [id])
+  brokerId String?
+  broker   Broker? @relation(fields: [brokerId], references: [id])
 
-  sourceUrl   String
-  dataFound   String   // JSON: what PII was detected
-  confidence  Float    @default(0.5) // 0-1
+  sourceUrl  String
+  dataFound  String // JSON: what PII was detected
+  confidence Float  @default(0.5) // 0-1
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 // ─── Inbound Broker Messages ────────────────────────────────
 
 model InboundMessage {
-  id                     String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Provider metadata
-  provider               String   // resend | gmail | sendgrid | generic
-  providerMessageId      String?
-  providerThreadId       String?
+  provider          String // resend | gmail | sendgrid | generic
+  providerMessageId String?
+  providerThreadId  String?
 
   // Envelope
-  fromAddress            String
-  toAddress              String
-  subject                String?
-  textBody               String?
-  htmlBody               String?
-  headers                String?  // JSON blob of selected headers
+  fromAddress String
+  toAddress   String
+  subject     String?
+  textBody    String?
+  htmlBody    String?
+  headers     String? // JSON blob of selected headers
 
-  receivedAt             DateTime @default(now())
+  receivedAt DateTime @default(now())
 
   // Matching results
   matchedRemovalRequestId  String?
-  matchedRemovalRequest    RemovalRequest? @relation(fields: [matchedRemovalRequestId], references: [id])
+  matchedRemovalRequest    RemovalRequest?  @relation(fields: [matchedRemovalRequestId], references: [id])
   matchedDeletionRequestId String?
   matchedDeletionRequest   DeletionRequest? @relation(fields: [matchedDeletionRequestId], references: [id])
   matchedBrokerId          String?
-  matchedBroker            Broker? @relation(fields: [matchedBrokerId], references: [id])
-  matchStatus              String  @default("unmatched") // matched | broker_only | unmatched | ambiguous
-  matchConfidence          Int?    // 0-100 score; null when unmatched
+  matchedBroker            Broker?          @relation(fields: [matchedBrokerId], references: [id])
+  matchStatus              String           @default("unmatched") // matched | broker_only | unmatched | ambiguous
+  matchConfidence          Int? // 0-100 score; null when unmatched
   matchSignals             String? // JSON array of signal objects for audit
 
   // Reply classification
-  classification           String?  // acknowledgment | completion | rejection | needs_more_info | noise | null
-  classificationConfidence Int?     // 0-100 score
-  classificationSignals    String?  // JSON array of ClassificationSignal objects
-  requiresReview           Boolean  @default(true)
+  classification           String? // acknowledgment | completion | rejection | needs_more_info | noise | null
+  classificationConfidence Int? // 0-100 score
+  classificationSignals    String? // JSON array of ClassificationSignal objects
+  requiresReview           Boolean @default(true)
 
   // Full original payload for audit
-  rawPayload             String   // JSON blob of the original provider payload
+  rawPayload String // JSON blob of the original provider payload
 
-  createdAt              DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  tasks                  UserTask[]
+  tasks UserTask[]
 }
 
 // ─── User Action Tasks ──────────────────────────────────────
 
 model UserTask {
-  id                  String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId              String
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  brokerId            String?
-  broker              Broker?  @relation(fields: [brokerId], references: [id])
-  deletionRequestId   String?
-  deletionRequest     DeletionRequest? @relation(fields: [deletionRequestId], references: [id])
-  removalRequestId    String?
-  removalRequest      RemovalRequest?  @relation(fields: [removalRequestId], references: [id])
-  inboundMessageId    String
-  inboundMessage      InboundMessage   @relation(fields: [inboundMessageId], references: [id])
+  brokerId          String?
+  broker            Broker?          @relation(fields: [brokerId], references: [id])
+  deletionRequestId String?
+  deletionRequest   DeletionRequest? @relation(fields: [deletionRequestId], references: [id])
+  removalRequestId  String?
+  removalRequest    RemovalRequest?  @relation(fields: [removalRequestId], references: [id])
+  inboundMessageId  String
+  inboundMessage    InboundMessage   @relation(fields: [inboundMessageId], references: [id])
 
-  actionType          String   // verify_identity | provide_info | click_confirm | reply_to_broker | generic
-  title               String
-  instructions        String
-  actionUrl           String?
-  dueAt               DateTime?
-  status              String   @default("pending") // pending | completed | dismissed | pending_review
-  requiresReview      Boolean  @default(false)
+  actionType     String // verify_identity | provide_info | click_confirm | reply_to_broker | generic
+  title          String
+  instructions   String
+  actionUrl      String?
+  dueAt          DateTime?
+  status         String    @default("pending") // pending | completed | dismissed | pending_review
+  requiresReview Boolean   @default(false)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Managed-Service Pilot ───────────────────────────────────
 
 model ManagedServiceEnrollment {
-  id                        String   @id @default(cuid())
-  userId                    String
-  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  packageKey                String
-  packageName               String
-  status                    String   @default("awaiting_payment")
+  packageKey    String
+  packageName   String
+  status        String @default("awaiting_payment")
   // awaiting_payment | queued | active | completed | canceled
-  billingStatus             String   @default("invoice_pending")
+  billingStatus String @default("invoice_pending")
   // invoice_pending | payment_submitted | paid | refunded
 
-  invoiceReference          String   @unique
-  priceUsd                  Int
-  currency                  String   @default("USD")
-  includedBrokerCount       Int
-  includedFollowUpRounds    Int
-  turnaroundSummary         String
-  supportWorkflowSummary    String
+  invoiceReference       String @unique
+  priceUsd               Int
+  currency               String @default("USD")
+  includedBrokerCount    Int
+  includedFollowUpRounds Int
+  turnaroundSummary      String
+  supportWorkflowSummary String
 
-  currentOpenRequestCount   Int      @default(0)
-  currentStalledRequestCount Int     @default(0)
-  currentPendingTaskCount   Int      @default(0)
-  currentPendingReviewCount Int      @default(0)
+  currentOpenRequestCount    Int @default(0)
+  currentStalledRequestCount Int @default(0)
+  currentPendingTaskCount    Int @default(0)
+  currentPendingReviewCount  Int @default(0)
 
-  contactPreference         String   @default("email")
-  preferredStartWindow      String?
-  notes                     String?
-  latestOperatorNote        String?
+  contactPreference    String  @default("email")
+  preferredStartWindow String?
+  notes                String?
+  latestOperatorNote   String?
 
-  requestedAt               DateTime @default(now())
-  paymentSubmittedAt        DateTime?
-  paidAt                    DateTime?
-  activatedAt               DateTime?
-  completedAt               DateTime?
-  canceledAt                DateTime?
-  nextCheckInAt             DateTime?
+  requestedAt        DateTime  @default(now())
+  paymentSubmittedAt DateTime?
+  paidAt             DateTime?
+  activatedAt        DateTime?
+  completedAt        DateTime?
+  canceledAt         DateTime?
+  nextCheckInAt      DateTime?
 
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Custom / Ad-hoc Removal Requests ───────────────────────
 
 model CustomRequest {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  targetUrl   String
-  status      String   @default("pending")
+  targetUrl String
+  status    String @default("pending")
   // pending | scanning | submitted | requires_user_action | completed
 
-  removalUrl  String?  // discovered opt-out link
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  removalUrl String? // discovered opt-out link
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

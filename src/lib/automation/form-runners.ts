@@ -1,4 +1,5 @@
 import type { PlaywrightRunResult } from "@/lib/automation/session";
+import { classifyAutomationFailure } from "@/lib/automation/challenges";
 import { runPlaywrightAutomationSession } from "@/lib/automation/session";
 import {
   type BrokerFormAutomationInput,
@@ -74,9 +75,19 @@ export async function runBrokerFormAutomation(
   );
 
   if (run.status === "failed") {
-    throw new Error(
-      `Form automation failed for ${input.brokerName}. Artifacts: ${run.runDir}. ${run.errorMessage ?? "Unknown error."}`
+    const blocker = classifyAutomationFailure(
+      `Form automation failed for ${input.brokerName}. Artifacts: ${run.runDir}. ${
+        run.errorMessage ?? "Unknown error."
+      }`,
+      input.brokerName
     );
+
+    outcome = {
+      status: "requires_user_action",
+      blockerType: blocker.blockerType,
+      removalUrl: run.finalUrl ?? input.entryUrl,
+      reason: blocker.reason,
+    };
   }
 
   return {

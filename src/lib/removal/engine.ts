@@ -15,6 +15,7 @@
 import { prisma } from "@/lib/db";
 import { classifyAutomationFailure } from "@/lib/automation/challenges";
 import { isFormAutomationEnabled } from "@/lib/automation/config";
+import { persistFormAutomationEvidence } from "@/lib/automation/evidence";
 import {
   runBrokerFormAutomation,
 } from "@/lib/automation/form-runners";
@@ -241,6 +242,11 @@ async function finalizeFormRemoval(
   now: Date,
   deadline: Date
 ): Promise<void> {
+  await persistFormAutomationEvidence({
+    removalRequestId: requestId,
+    result,
+  });
+
   if (result.outcome.status === "requires_user_action") {
     await prisma.removalRequest.update({
       where: { id: requestId },
