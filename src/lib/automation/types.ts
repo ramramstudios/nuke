@@ -18,6 +18,8 @@ export type FormAutomationBlockerType =
   | "captcha"
   | "bot_check"
   | "confirmation_required"
+  | "record_selection_required"
+  | "profile_url_required"
   | "unclear_submission"
   | "automation_gap";
 

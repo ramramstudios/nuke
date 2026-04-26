@@ -22,7 +22,7 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 What is still limited today:
 
 - Scan/discovery is still simulated.
-- Form broker execution now includes broker-specific assisted flows for Spokeo and Advanced Background Checks. Both can reach the farthest reliable step automatically and then hand the user into the exact remaining chore with blocker classification and evidence. FastPeopleSearch still has an experimental runner, but live bot-check challenges make it a weaker practical target right now.
+- Form broker execution now includes broker-specific assisted flows for Spokeo, Advanced Background Checks, FamilyTreeNow, Nuwber, SmartBackgroundChecks, and That's Them. They reach the farthest reliable step automatically, then hand the user into the exact remaining chore with blocker classification and evidence. FastPeopleSearch still has an experimental runner, but live bot-check challenges make it a weaker practical target right now.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 - Managed-service billing is manual for the pilot cohort; Stripe/self-serve subscription checkout is still future work.
@@ -447,7 +447,7 @@ This is a prototype focused on architecture, not production readiness:
 
 - **Scan results are simulated** — random probability based on broker category
 - **API removal methods are still stubbed** — no real HTTP calls yet
-- **Broker-specific Playwright form flows are still pending** — the browser foundation, env knobs, and artifact capture exist, but named broker automations are not implemented yet
+- **Broker-specific Playwright form flows are assisted, not universally end-to-end** — the browser foundation, env knobs, artifact capture, and named broker runners exist for the first priority waves, but live CAPTCHA, bot-check, and email-confirmation gates still route to user or operator chores
 - **Email brokers support a phase 1 pilot** via Resend or Gmail SMTP; broker acknowledgements/completions are still simulated
 - **Reply classification is rule-based** — deterministic keyword patterns, not ML; accuracy improves as real broker reply patterns accumulate
 - **Only `needs_more_info` advances request status** — matched needs_more_info replies set the removal request to `requires_user_action`; other classifications are stored for review only
@@ -466,8 +466,8 @@ This is a prototype focused on architecture, not production readiness:
 
 ### Near-term
 - [x] Playwright form automation foundation and smoke path
-- [ ] Broker-specific Playwright automation for the first prioritized brokers reaches full end-to-end completion without live challenge handoffs
-- [ ] Real email sending via SendGrid/Resend
+- [x] Broker-specific assisted Playwright automation for the first priority waves with challenge-aware handoffs
+- [x] Real email sending via Resend or Gmail SMTP
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ for async job processing
 - [ ] PostgreSQL migration

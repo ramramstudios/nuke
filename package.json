@@ -11,8 +11,10 @@
     "db:seed": "node --import tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma db push --force-reset && npm run db:seed",
+    "preflight:email": "node --import tsx scripts/email-preflight.ts",
     "smoke:email": "node --import tsx scripts/email-smoke-test.ts",
     "smoke:form": "node --import tsx scripts/form-foundation-smoke.ts",
+    "smoke:p3c4": "node --import tsx scripts/p3c4-assisted-smoke.ts",
     "automation:install-browser": "npx playwright install chromium"
   },
   "dependencies": {

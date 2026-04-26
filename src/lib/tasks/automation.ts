@@ -253,6 +253,30 @@ function buildAutomationTaskContent(
         ].join("\n"),
       };
 
+    case "record_selection_required":
+      return {
+        actionType: "review_broker_match",
+        title: `${brokerName}: Select the matching record`,
+        instructions: [
+          `NUKE reached ${brokerName}'s search or opt-out flow, but the broker still needs a person to choose the exact matching record.`,
+          "Open the broker page using the task link.",
+          "Search with your current name and location if the fields are not already filled.",
+          "Only continue the opt-out if the listing clearly matches your information.",
+        ].join("\n"),
+      };
+
+    case "profile_url_required":
+      return {
+        actionType: "review_broker_match",
+        title: `${brokerName}: Find the profile URL`,
+        instructions: [
+          `${brokerName} requires the exact profile URL before it accepts an opt-out request.`,
+          "Open the broker search page using the task link.",
+          "Select the listing that clearly matches your information.",
+          "Copy that profile URL into the broker's removal form and continue any email-confirmation step.",
+        ].join("\n"),
+      };
+
     case "unclear_submission":
       return {
         actionType: "verify_submission",

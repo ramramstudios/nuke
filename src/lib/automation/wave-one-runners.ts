@@ -20,7 +20,13 @@ interface RankedSpokeoCandidate {
   searchScore: number;
 }
 
+type RankedListingCandidate = Omit<
+  RankedSpokeoCandidate,
+  "currentAddress" | "profileScore" | "profileTitle"
+>;
+
 const SPOKEO_RESULT_LINK_PATTERN = /^https:\/\/www\.spokeo\.com\/[^?#]+\/p[a-z0-9]+/i;
+const NUWBER_RESULT_LINK_PATTERN = /^https:\/\/nuwber\.com\/(?:person|p)\/[^?#]+/i;
 const MAX_SPOKEO_PROFILE_INSPECTIONS = 6;
 const STREET_STOP_WORDS = new Set([
   "apt",
@@ -62,8 +68,12 @@ const STREET_STOP_WORDS = new Set([
 
 export const WAVE_ONE_BROKER_FORM_RUNNERS: Record<string, BrokerFormRunner> = {
   "advancedbackgroundchecks": runAdvancedBackgroundChecks,
+  "familytreenow": runFamilyTreeNow,
   "fastpeoplesearch": runFastPeopleSearch,
+  "nuwber": runNuwber,
+  "smartbackgroundchecks": runSmartBackgroundChecks,
   "spokeo": runSpokeo,
+  "thatsthem": runThatsThem,
 };
 
 async function runSpokeo({
@@ -386,6 +396,356 @@ async function runAdvancedBackgroundChecks({
   };
 }
 
+async function runFamilyTreeNow({
+  captureScreenshot,
+  input,
+  log,
+  page,
+  recordDetail,
+}: Parameters<BrokerFormRunner>[0]): Promise<FormAutomationOutcome> {
+  const fullName = pickPrimaryFullName(input.profile.fullNames);
+  const splitName = splitFullName(fullName);
+  const address = pickPrimaryAddress(input.profile.addresses);
+  const confirmationEmail = pickConfirmationEmail(input.profile.emails);
+
+  if (!splitName || !address || !confirmationEmail) {
+    log("warn", "FamilyTreeNow runner missing required profile data", {
+      hasAddress: Boolean(address),
+      hasConfirmationEmail: Boolean(confirmationEmail),
+      hasSplitName: Boolean(splitName),
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "missing_profile_data",
+      removalUrl: input.entryUrl,
+      reason:
+        "NUKE needs a first and last name, a city/state address, and a confirmation email before it can assist FamilyTreeNow.",
+    };
+  }
+
+  const searchHint = {
+    city: address.city,
+    firstName: splitName.first,
+    lastName: splitName.last,
+    middleName: splitName.middle,
+    state: address.state,
+  };
+  recordDetail("familyTreeNowSearchHint", searchHint);
+  recordDetail("confirmationEmail", confirmationEmail);
+
+  log("info", "Opening FamilyTreeNow opt-out start page", {
+    entryUrl: input.entryUrl,
+  });
+  await page.goto(input.entryUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(2_000);
+
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[type='email']",
+      "input[name='email']",
+      "input[name='Email']",
+      "input[id*='email' i]",
+    ],
+    confirmationEmail
+  );
+  await captureScreenshot("familytreenow-optout-start");
+
+  if (await hasCaptcha(page)) {
+    log("warn", "FamilyTreeNow requires manual CAPTCHA completion", {
+      entryUrl: input.entryUrl,
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "captcha",
+      removalUrl: input.entryUrl,
+      reason:
+        "FamilyTreeNow's opt-out flow starts with a CAPTCHA/email gate before searching for the matching record.",
+    };
+  }
+
+  return {
+    status: "requires_user_action",
+    blockerType: "record_selection_required",
+    removalUrl: input.entryUrl,
+    reason:
+      "FamilyTreeNow requires the user to begin the opt-out procedure, search for the matching record, and confirm any email step.",
+  };
+}
+
+async function runNuwber({
+  captureScreenshot,
+  input,
+  log,
+  page,
+  recordDetail,
+}: Parameters<BrokerFormRunner>[0]): Promise<FormAutomationOutcome> {
+  const fullName = pickPrimaryFullName(input.profile.fullNames);
+  const address = pickPrimaryAddress(input.profile.addresses);
+  const confirmationEmail = pickConfirmationEmail(input.profile.emails);
+
+  if (!fullName || !address || !confirmationEmail) {
+    log("warn", "Nuwber runner missing required profile data", {
+      hasAddress: Boolean(address),
+      hasConfirmationEmail: Boolean(confirmationEmail),
+      hasFullName: Boolean(fullName),
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "missing_profile_data",
+      removalUrl: input.entryUrl,
+      reason:
+        "NUKE needs a full name, a city/state address, and a confirmation email before it can assist Nuwber.",
+    };
+  }
+
+  const searchUrl = buildNuwberSearchUrl(fullName, address.city, address.state);
+  recordDetail("searchUrl", searchUrl);
+  recordDetail("confirmationEmail", confirmationEmail);
+
+  log("info", "Opening Nuwber search results", {
+    searchUrl,
+  });
+  await page.goto(searchUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(3_000);
+  await captureScreenshot("nuwber-search-results");
+
+  if (await isBrokerChallenge(page)) {
+    log("warn", "Nuwber search flow is blocked by a live challenge", {
+      searchUrl,
+    });
+    return {
+      status: "requires_user_action",
+      blockerType: "bot_check",
+      removalUrl: searchUrl,
+      reason:
+        "Nuwber presented a live bot-check or rate-limit screen before NUKE could inspect profile results.",
+    };
+  }
+
+  const candidates = await readListingCandidates(page, NUWBER_RESULT_LINK_PATTERN);
+  recordDetail("candidateCount", candidates.length);
+  const ranked = rankGenericCandidates(candidates, fullName, address);
+  recordDetail(
+    "topSearchCandidates",
+    ranked.slice(0, 5).map((entry) => ({
+      href: entry.candidate.href,
+      matchSignals: entry.matchSignals,
+      score: entry.combinedScore,
+      text: entry.candidate.text,
+    }))
+  );
+
+  const best = pickBestGenericCandidate(ranked);
+  if (!best) {
+    log("warn", "Nuwber runner could not confidently identify one profile", {
+      candidateCount: candidates.length,
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "profile_url_required",
+      removalUrl: searchUrl,
+      reason:
+        "Nuwber requires the exact profile URL, and NUKE could not confidently choose one result from the search page.",
+    };
+  }
+
+  const optOutUrl = buildNuwberPrefilledOptOutUrl(input.entryUrl, best.href);
+  recordDetail("matchedProfileUrl", best.href);
+  recordDetail("prefilledOptOutUrl", optOutUrl);
+
+  log("info", "Opening Nuwber opt-out page with matched profile context", {
+    matchedProfileUrl: best.href,
+  });
+  await page.goto(optOutUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(2_000);
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[type='url']",
+      "input[name='url']",
+      "input[name='profile_url']",
+      "input[id*='url' i]",
+    ],
+    best.href
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[type='email']",
+      "input[name='email']",
+      "input[id*='email' i]",
+    ],
+    confirmationEmail
+  );
+  await captureScreenshot("nuwber-optout-ready");
+
+  if (await hasCaptcha(page)) {
+    log("warn", "Nuwber requires manual CAPTCHA completion", {
+      optOutUrl,
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "captcha",
+      removalUrl: optOutUrl,
+      reason:
+        "Nuwber reached the matched opt-out form, but the final removal step requires a live CAPTCHA and email confirmation.",
+    };
+  }
+
+  return {
+    status: "requires_user_action",
+    blockerType: "confirmation_required",
+    removalUrl: optOutUrl,
+    reason:
+      "Nuwber requires a final user-confirmed removal submission and email confirmation after the matched profile URL is entered.",
+  };
+}
+
+async function runSmartBackgroundChecks({
+  captureScreenshot,
+  input,
+  log,
+  page,
+  recordDetail,
+}: Parameters<BrokerFormRunner>[0]): Promise<FormAutomationOutcome> {
+  const fullName = pickPrimaryFullName(input.profile.fullNames);
+  const splitName = splitFullName(fullName);
+  const address = pickPrimaryAddress(input.profile.addresses);
+  const confirmationEmail = pickConfirmationEmail(input.profile.emails);
+
+  if (!splitName || !address || !confirmationEmail) {
+    log("warn", "SmartBackgroundChecks runner missing required profile data", {
+      hasAddress: Boolean(address),
+      hasConfirmationEmail: Boolean(confirmationEmail),
+      hasSplitName: Boolean(splitName),
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "missing_profile_data",
+      removalUrl: input.entryUrl,
+      reason:
+        "NUKE needs a first and last name, a city/state address, and a confirmation email before it can assist SmartBackgroundChecks.",
+    };
+  }
+
+  recordDetail("searchHint", {
+    city: address.city,
+    firstName: splitName.first,
+    lastName: splitName.last,
+    state: address.state,
+  });
+  recordDetail("confirmationEmail", confirmationEmail);
+
+  log("info", "Opening SmartBackgroundChecks opt-out flow", {
+    entryUrl: input.entryUrl,
+  });
+  await page.goto(input.entryUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(2_000);
+
+  await fillCommonPersonFields(page, splitName, address, confirmationEmail);
+  await captureScreenshot("smartbackgroundchecks-optout-ready");
+
+  if (await isBrokerChallenge(page)) {
+    log("warn", "SmartBackgroundChecks requires manual challenge completion", {
+      entryUrl: input.entryUrl,
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: (await hasCaptcha(page)) ? "captcha" : "bot_check",
+      removalUrl: input.entryUrl,
+      reason:
+        "SmartBackgroundChecks presented a live CAPTCHA or bot-check before NUKE could safely continue the opt-out flow.",
+    };
+  }
+
+  return {
+    status: "requires_user_action",
+    blockerType: "record_selection_required",
+    removalUrl: input.entryUrl,
+    reason:
+      "SmartBackgroundChecks requires selecting the exact matching listing before the final removal request can be submitted.",
+  };
+}
+
+async function runThatsThem({
+  captureScreenshot,
+  input,
+  log,
+  page,
+  recordDetail,
+}: Parameters<BrokerFormRunner>[0]): Promise<FormAutomationOutcome> {
+  const fullName = pickPrimaryFullName(input.profile.fullNames);
+  const address = pickPrimaryAddress(input.profile.addresses);
+  const confirmationEmail = pickConfirmationEmail(input.profile.emails);
+
+  if (!fullName || !address || !confirmationEmail) {
+    log("warn", "That's Them runner missing required profile data", {
+      hasAddress: Boolean(address),
+      hasConfirmationEmail: Boolean(confirmationEmail),
+      hasFullName: Boolean(fullName),
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: "missing_profile_data",
+      removalUrl: input.entryUrl,
+      reason:
+        "NUKE needs a full name, a city/state address, and a confirmation email before it can assist That's Them.",
+    };
+  }
+
+  const searchUrl = buildThatsThemNameSearchUrl(fullName, address);
+  recordDetail("searchUrl", searchUrl);
+  recordDetail("confirmationEmail", confirmationEmail);
+
+  log("info", "Opening That's Them name search for broker-aware handoff", {
+    searchUrl,
+  });
+  await page.goto(searchUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForTimeout(2_500);
+  await captureScreenshot("thatsthem-search-results");
+
+  if (await isBrokerChallenge(page)) {
+    log("warn", "That's Them search is blocked by a live challenge", {
+      searchUrl,
+    });
+
+    return {
+      status: "requires_user_action",
+      blockerType: (await hasCaptcha(page)) ? "captcha" : "bot_check",
+      removalUrl: searchUrl,
+      reason:
+        "That's Them blocked the assisted search behind a live challenge, so NUKE stopped at the broker search page.",
+    };
+  }
+
+  return {
+    status: "requires_user_action",
+    blockerType: "record_selection_required",
+    removalUrl: searchUrl,
+    reason:
+      "That's Them requires a person to confirm the matching free listing and continue the opt-out while avoiding paid identity-protection links.",
+  };
+}
+
 async function readSpokeoCandidates(page: Page): Promise<ListingCandidate[]> {
   const rawCandidates = await page.evaluate((pattern) => {
     const hrefPattern = new RegExp(pattern, "i");
@@ -409,6 +769,36 @@ async function readSpokeoCandidates(page: Page): Promise<ListingCandidate[]> {
       })
       .filter((candidate): candidate is ListingCandidate => Boolean(candidate));
   }, SPOKEO_RESULT_LINK_PATTERN.source);
+
+  return dedupeListingCandidates(rawCandidates);
+}
+
+async function readListingCandidates(
+  page: Page,
+  pattern: RegExp
+): Promise<ListingCandidate[]> {
+  const rawCandidates = await page.evaluate((patternSource) => {
+    const hrefPattern = new RegExp(patternSource, "i");
+
+    return Array.from(document.querySelectorAll("a[href]"))
+      .map((anchor) => {
+        const href = (anchor as HTMLAnchorElement).href;
+        if (!hrefPattern.test(href)) return null;
+
+        const text = anchor.textContent?.trim() ?? "";
+        const containerText =
+          anchor.closest("article, li, .card, .result, .person")?.textContent?.trim() ??
+          anchor.parentElement?.textContent?.trim() ??
+          text;
+
+        return {
+          context: containerText.replace(/\s+/g, " ").trim(),
+          href,
+          text: text.replace(/\s+/g, " ").trim(),
+        };
+      })
+      .filter((candidate): candidate is ListingCandidate => Boolean(candidate));
+  }, pattern.source);
 
   return dedupeListingCandidates(rawCandidates);
 }
@@ -508,6 +898,46 @@ function rankSpokeoSearchCandidates(
       };
     })
     .sort((left, right) => right.searchScore - left.searchScore);
+}
+
+function rankGenericCandidates(
+  candidates: ListingCandidate[],
+  fullName: string,
+  address: { city: string; state: string; street: string; zip: string }
+): RankedListingCandidate[] {
+  return candidates
+    .map((candidate) => {
+      const match = scoreSpokeoHaystack(
+        `${candidate.text} ${candidate.context} ${candidate.href}`,
+        fullName,
+        address
+      );
+
+      return {
+        candidate,
+        combinedScore: match.score,
+        matchSignals: match.signals,
+        searchScore: match.score,
+      };
+    })
+    .sort((left, right) => right.searchScore - left.searchScore);
+}
+
+function pickBestGenericCandidate(
+  ranked: RankedListingCandidate[]
+): ListingCandidate | null {
+  const best = ranked[0];
+  if (!best) return null;
+
+  const second = ranked[1];
+  const hasAddressSignal = best.matchSignals.some((signal) =>
+    signal.startsWith("street:") || signal === "zip" || signal === "city"
+  );
+
+  if (!hasAddressSignal || best.combinedScore < 185) return null;
+  if (second && best.combinedScore - second.combinedScore < 30) return null;
+
+  return best.candidate;
 }
 
 async function inspectSpokeoProfileCandidate(
@@ -690,6 +1120,44 @@ function buildFastPeopleSearchSearchUrl(
   return `https://www.fastpeoplesearch.com/search?${search.toString()}`;
 }
 
+function buildNuwberSearchUrl(
+  fullName: string,
+  city: string,
+  state: string
+): string {
+  const search = new URLSearchParams({
+    name: fullName,
+    city,
+    state,
+  });
+  return `https://nuwber.com/search?${search.toString()}`;
+}
+
+function buildNuwberPrefilledOptOutUrl(
+  entryUrl: string,
+  profileUrl: string
+): string {
+  const url = new URL(entryUrl);
+  url.searchParams.set("url", profileUrl);
+  return url.toString();
+}
+
+function buildThatsThemNameSearchUrl(
+  fullName: string,
+  address: { city: string; state: string }
+): string {
+  const nameSlug = slugifyPathSegment(fullName);
+  const locationSlug = slugifyPathSegment(
+    [address.city, address.state].filter(Boolean).join(" ")
+  );
+
+  if (!nameSlug || !locationSlug) {
+    return "https://thatsthem.com/optout";
+  }
+
+  return `https://thatsthem.com/name/${nameSlug}/${locationSlug}`;
+}
+
 function formatFastPeopleSearchLocation(address: {
   city: string;
   state: string;
@@ -698,6 +1166,10 @@ function formatFastPeopleSearchLocation(address: {
   const parts = [address.city, address.state].filter(Boolean);
   const base = parts.join(", ");
   return address.zip ? `${base} ${address.zip}`.trim() : base;
+}
+
+function slugifyPathSegment(value: string): string {
+  return normalizeForMatch(value).replace(/\s+/g, "-");
 }
 
 function pickPrimaryFullName(fullNames: string[]): string | null {
@@ -803,6 +1275,107 @@ async function ensureInputValue(
   await input.fill(value);
 }
 
+async function fillFirstMatchingInput(
+  page: Page,
+  selectors: string[],
+  value: string
+): Promise<boolean> {
+  for (const selector of selectors) {
+    const input = page.locator(selector).first();
+    if ((await input.count()) === 0) continue;
+    if (!(await input.isVisible().catch(() => true))) continue;
+
+    await input.fill(value).catch(() => null);
+    const currentValue = await input.inputValue().catch(() => "");
+    if (currentValue.trim() === value.trim()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function fillCommonPersonFields(
+  page: Page,
+  splitName: { first: string; middle: string; last: string },
+  address: { city: string; state: string; street: string; zip: string },
+  email: string
+): Promise<void> {
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='firstName']",
+      "input[name='first_name']",
+      "input[name='firstname']",
+      "input[name='fname']",
+      "input[id*='first' i]",
+      "input[placeholder*='First' i]",
+    ],
+    splitName.first
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='middleName']",
+      "input[name='middle_name']",
+      "input[name='middlename']",
+      "input[id*='middle' i]",
+      "input[placeholder*='Middle' i]",
+    ],
+    splitName.middle
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='lastName']",
+      "input[name='last_name']",
+      "input[name='lastname']",
+      "input[name='lname']",
+      "input[id*='last' i]",
+      "input[placeholder*='Last' i]",
+    ],
+    splitName.last
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[type='email']",
+      "input[name='email']",
+      "input[id*='email' i]",
+      "input[placeholder*='Email' i]",
+    ],
+    email
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='city']",
+      "input[id*='city' i]",
+      "input[placeholder*='City' i]",
+    ],
+    address.city
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='state']",
+      "input[id*='state' i]",
+      "input[placeholder*='State' i]",
+    ],
+    address.state
+  );
+  await fillFirstMatchingInput(
+    page,
+    [
+      "input[name='zip']",
+      "input[name='zipcode']",
+      "input[id*='zip' i]",
+      "input[placeholder*='Zip' i]",
+    ],
+    address.zip
+  );
+}
+
 async function ensureCheckbox(page: Page, selector: string): Promise<void> {
   const input = page.locator(selector).first();
   if ((await input.count()) === 0) return;
@@ -833,6 +1406,20 @@ async function hasCaptcha(page: Page): Promise<boolean> {
   }
 
   return false;
+}
+
+async function isBrokerChallenge(page: Page): Promise<boolean> {
+  if (await hasCaptcha(page)) return true;
+
+  const title = await page.title().catch(() => "");
+  if (/access denied|attention required|just a moment|rate limited|security/i.test(title)) {
+    return true;
+  }
+
+  const bodyText = await page.locator("body").innerText().catch(() => "");
+  return /access denied|attention required|checking your browser|enable javascript and cookies|security challenge|rate limited|cloudflare|blocked/i.test(
+    bodyText
+  );
 }
 
 async function isFastPeopleSearchChallenge(page: Page): Promise<boolean> {
