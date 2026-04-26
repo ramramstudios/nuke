@@ -1,7 +1,13 @@
 import type { ClassificationLabel } from "@/lib/communications/types";
+import { hasBrokerFormRunner } from "@/lib/automation/form-runners";
 import { prisma } from "@/lib/db";
 import type {
+  BrokerAutomationJobCounts,
+  BrokerCoverageBlockerMetric,
+  BrokerCoverageMetric,
+  BrokerCoverageStatus,
   BrokerSuccessMetric,
+  CoverageMetricsReport,
   CohortSuccessMetric,
   MetricsOverview,
   ReportTone,
@@ -20,6 +26,9 @@ const INACTIVITY_DANGER_DAYS = 21;
 
 type RequestRecord = Awaited<
   ReturnType<typeof getMetricsRequests>
+>[number];
+type CoverageBrokerRecord = Awaited<
+  ReturnType<typeof getCoverageBrokers>
 >[number];
 
 interface AnalyzedRequest {
@@ -56,12 +65,16 @@ export async function getSuccessMetricsReport(
   userId: string
 ): Promise<SuccessMetricsReport> {
   const now = new Date();
-  const requests = await getMetricsRequests(userId);
+  const [requests, coverageBrokers] = await Promise.all([
+    getMetricsRequests(userId),
+    getCoverageBrokers(userId),
+  ]);
   const analyzed = requests.map((request) => analyzeRequest(request, now));
 
   return {
     generatedAt: now.toISOString(),
     overview: summarizeOverview(analyzed),
+    coverage: buildCoverageReport(coverageBrokers),
     brokers: summarizeByBroker(analyzed),
     cohorts: summarizeByCohort(analyzed),
     stalledRequests: buildStalledRequests(analyzed),
@@ -115,6 +128,63 @@ async function getMetricsRequests(userId: string) {
       },
     },
     orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+async function getCoverageBrokers(userId: string) {
+  return prisma.broker.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      name: true,
+      domain: true,
+      category: true,
+      priority: true,
+      removalMethod: true,
+      requests: {
+        where: {
+          deletionRequest: { userId },
+        },
+        select: {
+          id: true,
+          status: true,
+          submittedAt: true,
+          completedAt: true,
+          createdAt: true,
+          automationEvidence: {
+            select: {
+              blockerType: true,
+              capturedAt: true,
+              finishedAt: true,
+              outcomeStatus: true,
+            },
+          },
+          automationJobs: {
+            select: {
+              status: true,
+              lastStartedAt: true,
+              lastFinishedAt: true,
+              completedAt: true,
+            },
+          },
+          tasks: {
+            select: {
+              status: true,
+              requiresReview: true,
+              createdAt: true,
+              updatedAt: true,
+              inboundMessage: {
+                select: {
+                  provider: true,
+                  rawPayload: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ priority: "asc" }, { name: "asc" }],
   });
 }
 
@@ -266,6 +336,155 @@ function summarizeOverview(requests: AnalyzedRequest[]): MetricsOverview {
   };
 }
 
+function buildCoverageReport(
+  brokers: CoverageBrokerRecord[]
+): CoverageMetricsReport {
+  const rows = brokers.map(buildBrokerCoverageMetric).sort(sortCoverageRows);
+  const blockerTotals = new Map<string, number>();
+
+  for (const row of rows) {
+    for (const blocker of row.blockerBreakdown) {
+      blockerTotals.set(
+        blocker.blockerType,
+        (blockerTotals.get(blocker.blockerType) ?? 0) + blocker.count
+      );
+    }
+  }
+
+  const totalRequests = rows.reduce((sum, row) => sum + row.totalRequests, 0);
+  const handoffCount = rows.reduce((sum, row) => sum + row.handoffCount, 0);
+  const jobCounts = rows.reduce(
+    (sum, row) => ({
+      queued: sum.queued + row.automationJobCounts.queued,
+      running: sum.running + row.automationJobCounts.running,
+      succeeded: sum.succeeded + row.automationJobCounts.succeeded,
+      failed: sum.failed + row.automationJobCounts.failed,
+      canceled: sum.canceled + row.automationJobCounts.canceled,
+    }),
+    emptyJobCounts()
+  );
+
+  const automaticCount = rows.filter(
+    (row) => row.coverageStatus === "automatic"
+  ).length;
+  const assistedCount = rows.filter(
+    (row) => row.coverageStatus === "assisted"
+  ).length;
+
+  return {
+    activeBrokerCount: rows.length,
+    automaticCount,
+    assistedCount,
+    blockedCount: rows.filter((row) => row.coverageStatus === "blocked").length,
+    manualCount: rows.filter((row) => row.coverageStatus === "manual").length,
+    automationReadyCount: automaticCount + assistedCount,
+    automationReadyRate: toPercent(automaticCount + assistedCount, rows.length),
+    handoffCount,
+    handoffRate: toPercent(handoffCount, totalRequests),
+    blockerCount: rows.reduce((sum, row) => sum + row.blockerCount, 0),
+    mostCommonBlocker: topBlockerFromMap(blockerTotals),
+    queuedJobs: jobCounts.queued,
+    runningJobs: jobCounts.running,
+    failedJobs: jobCounts.failed,
+    brokers: rows,
+  };
+}
+
+function buildBrokerCoverageMetric(
+  broker: CoverageBrokerRecord
+): BrokerCoverageMetric {
+  const hasFormRunner = hasBrokerFormRunner(broker.name);
+  const jobCounts = emptyJobCounts();
+  const blockerCounts = new Map<string, number>();
+  let evidenceCount = 0;
+  let handoffCount = 0;
+  let lastAutomationAt: Date | null = null;
+  let lastBlockerType: string | null = null;
+
+  for (const request of broker.requests) {
+    const requestBlockers = new Set<string>();
+    const automationTasks = request.tasks.filter(
+      (task) => task.inboundMessage.provider === "automation"
+    );
+
+    if (automationTasks.length > 0) {
+      handoffCount++;
+    }
+
+    for (const evidence of request.automationEvidence) {
+      evidenceCount++;
+      lastAutomationAt = maxDate(lastAutomationAt, evidence.capturedAt);
+      lastAutomationAt = maxDate(lastAutomationAt, evidence.finishedAt);
+      if (evidence.blockerType) {
+        requestBlockers.add(evidence.blockerType);
+        lastBlockerType = evidence.blockerType;
+      }
+    }
+
+    for (const job of request.automationJobs) {
+      incrementJobCount(jobCounts, job.status);
+      lastAutomationAt = maxDate(lastAutomationAt, job.lastStartedAt);
+      lastAutomationAt = maxDate(lastAutomationAt, job.lastFinishedAt);
+      lastAutomationAt = maxDate(lastAutomationAt, job.completedAt);
+    }
+
+    for (const task of automationTasks) {
+      lastAutomationAt = maxDate(lastAutomationAt, task.createdAt);
+      lastAutomationAt = maxDate(lastAutomationAt, task.updatedAt);
+      const blockerType = blockerTypeFromAutomationTask(task.inboundMessage.rawPayload);
+      if (blockerType) {
+        requestBlockers.add(blockerType);
+        lastBlockerType = blockerType;
+      }
+    }
+
+    for (const blockerType of requestBlockers) {
+      blockerCounts.set(blockerType, (blockerCounts.get(blockerType) ?? 0) + 1);
+    }
+  }
+
+  const blockerBreakdown = [...blockerCounts.entries()]
+    .map(([blockerType, count]) => ({ blockerType, count }))
+    .sort((left, right) => right.count - left.count || left.blockerType.localeCompare(right.blockerType));
+  const topBlocker = blockerBreakdown[0] ?? null;
+  const stats = {
+    blockerCount: blockerBreakdown.reduce((sum, blocker) => sum + blocker.count, 0),
+    failedJobs: jobCounts.failed,
+    handoffCount,
+    hasFormRunner,
+    submittedCount: broker.requests.filter(isSubmittedLikeCoverageRequest).length,
+  };
+  const classification = classifyBrokerCoverage(broker, stats);
+
+  return {
+    brokerId: broker.id,
+    brokerName: broker.name,
+    domain: broker.domain,
+    category: broker.category,
+    priority: broker.priority,
+    removalMethod: broker.removalMethod,
+    coverageStatus: classification.status,
+    coverageLabel: classification.label,
+    coverageReason: classification.reason,
+    hasFormRunner,
+    totalRequests: broker.requests.length,
+    submittedCount: stats.submittedCount,
+    completedCount: broker.requests.filter(
+      (request) => request.status === "completed" || request.completedAt !== null
+    ).length,
+    handoffCount,
+    handoffRate: toPercent(handoffCount, broker.requests.length),
+    blockerCount: stats.blockerCount,
+    topBlockerType: topBlocker?.blockerType ?? null,
+    blockerBreakdown,
+    automationJobCounts: jobCounts,
+    evidenceCount,
+    lastAutomationAt: lastAutomationAt?.toISOString() ?? null,
+    lastBlockerType,
+    nextAction: buildCoverageNextAction(broker.removalMethod, classification.status, topBlocker),
+  };
+}
+
 function summarizeByBroker(requests: AnalyzedRequest[]): BrokerSuccessMetric[] {
   const groups = new Map<string, AnalyzedRequest[]>();
 
@@ -402,6 +621,188 @@ function buildStalledRequests(requests: AnalyzedRequest[]): StalledRequestReport
       pendingReview: request.pendingReview,
       pendingTaskTitle: request.pendingTaskTitle,
     }));
+}
+
+function classifyBrokerCoverage(
+  broker: Pick<CoverageBrokerRecord, "removalMethod">,
+  stats: {
+    blockerCount: number;
+    failedJobs: number;
+    handoffCount: number;
+    hasFormRunner: boolean;
+    submittedCount: number;
+  }
+): { label: string; reason: string; status: BrokerCoverageStatus } {
+  if (stats.blockerCount > 0 || stats.failedJobs > 0) {
+    return {
+      status: "blocked",
+      label: "Blocked / Handoff",
+      reason:
+        stats.handoffCount > 0
+          ? "Automation reached a broker-specific stop and produced a chore."
+          : "Automation jobs have failed and need review before this broker can scale.",
+    };
+  }
+
+  if (broker.removalMethod === "email" || broker.removalMethod === "api") {
+    return {
+      status: "automatic",
+      label: "Automatic",
+      reason: "The primary broker method can be submitted without a form handoff.",
+    };
+  }
+
+  if (broker.removalMethod === "form" && stats.hasFormRunner) {
+    return {
+      status: "assisted",
+      label: "Assisted",
+      reason: "A broker-specific runner exists and can drive the handoff path.",
+    };
+  }
+
+  return {
+    status: "manual",
+    label: "Manual",
+    reason:
+      broker.removalMethod === "manual_link"
+        ? "The broker is intentionally routed to a guided manual link."
+        : "No broker-specific automation runner is registered yet.",
+  };
+}
+
+function buildCoverageNextAction(
+  removalMethod: string,
+  status: BrokerCoverageStatus,
+  topBlocker: BrokerCoverageBlockerMetric | null
+): string {
+  if (status === "automatic") {
+    return "Watch reply and completion rates.";
+  }
+
+  if (status === "assisted") {
+    return "Keep the runner queued and monitor handoff rate.";
+  }
+
+  if (status === "blocked") {
+    return topBlocker
+      ? `Triage ${topBlocker.blockerType.replace(/_/g, " ")} handoffs.`
+      : "Review automation artifacts and retry policy.";
+  }
+
+  if (removalMethod === "form") {
+    return "Prioritize a broker-specific runner or keep as guided chore.";
+  }
+
+  return "Keep manual instructions current.";
+}
+
+function isSubmittedLikeCoverageRequest(
+  request: CoverageBrokerRecord["requests"][number]
+): boolean {
+  return (
+    request.submittedAt !== null ||
+    ["submitted", "acknowledged", "completed"].includes(request.status)
+  );
+}
+
+function blockerTypeFromAutomationTask(rawPayload: string): string | null {
+  try {
+    const payload = JSON.parse(rawPayload) as { blockerType?: unknown };
+    return typeof payload.blockerType === "string" && payload.blockerType
+      ? payload.blockerType
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function emptyJobCounts(): BrokerAutomationJobCounts {
+  return {
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    canceled: 0,
+  };
+}
+
+function incrementJobCount(counts: BrokerAutomationJobCounts, status: string): void {
+  switch (status) {
+    case "queued":
+      counts.queued++;
+      break;
+    case "running":
+      counts.running++;
+      break;
+    case "succeeded":
+      counts.succeeded++;
+      break;
+    case "failed":
+      counts.failed++;
+      break;
+    case "canceled":
+      counts.canceled++;
+      break;
+  }
+}
+
+function topBlockerFromMap(
+  counts: Map<string, number>
+): BrokerCoverageBlockerMetric | null {
+  const sorted = [...counts.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
+  );
+  const top = sorted[0];
+  return top ? { blockerType: top[0], count: top[1] } : null;
+}
+
+function maxDate(left: Date | null, right: Date | null): Date | null {
+  if (!right) {
+    return left;
+  }
+
+  if (!left || right.getTime() > left.getTime()) {
+    return right;
+  }
+
+  return left;
+}
+
+function sortCoverageRows(
+  left: BrokerCoverageMetric,
+  right: BrokerCoverageMetric
+): number {
+  return (
+    coverageRank(left.coverageStatus) - coverageRank(right.coverageStatus) ||
+    priorityRank(left.priority) - priorityRank(right.priority) ||
+    right.handoffCount - left.handoffCount ||
+    right.totalRequests - left.totalRequests ||
+    left.brokerName.localeCompare(right.brokerName)
+  );
+}
+
+function coverageRank(status: BrokerCoverageStatus): number {
+  switch (status) {
+    case "blocked":
+      return 0;
+    case "assisted":
+      return 1;
+    case "manual":
+      return 2;
+    case "automatic":
+      return 3;
+  }
+}
+
+function priorityRank(priority: string): number {
+  switch (priority) {
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    default:
+      return 2;
+  }
 }
 
 function getStallDescriptor(input: {

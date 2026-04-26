@@ -16,7 +16,10 @@ import {
   parseJsonResponse,
 } from "@/lib/http/client-response";
 import type {
+  BrokerCoverageMetric,
+  BrokerCoverageStatus,
   BrokerSuccessMetric,
+  CoverageMetricsReport,
   CohortSuccessMetric,
   StalledRequestReport,
   SuccessMetricsReport,
@@ -106,6 +109,7 @@ export default function MetricsPage() {
   }
 
   const overview = report?.overview ?? null;
+  const coverage = report?.coverage ?? null;
 
   return (
       <PageContent wide>
@@ -127,10 +131,10 @@ export default function MetricsPage() {
 
         {error && <Banner tone="error">{error}</Banner>}
 
-        {!report || !overview || overview.totalRequests === 0 ? (
+        {!report || !overview || !coverage ? (
           <EmptyState
-            title="No broker workflow metrics yet."
-            body="Submit broker removals first, then this page will track reply rates, aging, and stalled requests."
+            title="No broker workflow metrics available."
+            body="Submit broker removals first, then this page will track coverage, handoffs, replies, aging, and stalled requests."
           />
         ) : (
         <>
@@ -144,6 +148,8 @@ export default function MetricsPage() {
             <MetricCard label="Stalled Watchlist" value={overview.stalledCount} hint="Overdue, near-deadline, blocked, or inactive requests" />
             <MetricCard label="Needs Attention" value={`${overview.requiresUserActionCount} user / ${overview.pendingReviewCount} review`} hint="Requests waiting on user follow-up or operator review" />
           </div>
+
+          <CoverageDashboard coverage={coverage} />
 
           <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
             <section className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -270,6 +276,301 @@ function MetricCard({
   );
 }
 
+function CoverageDashboard({ coverage }: { coverage: CoverageMetricsReport }) {
+  const visibleBrokers = coverage.brokers;
+
+  return (
+    <section
+      className="rounded-2xl border p-5"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold" style={{ color: "var(--text)" }}>
+            Coverage and Handoff
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+            Broker automation coverage, queue load, blocker mix, and handoff burden.
+          </p>
+        </div>
+        <div
+          className="rounded-xl border px-3 py-2 text-sm"
+          style={{
+            borderColor: "var(--border)",
+            background: "var(--bg-subtle)",
+            color: "var(--text-2)",
+          }}
+        >
+          {coverage.automationReadyCount} of {coverage.activeBrokerCount} brokers
+          automation-ready
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <CoverageStat
+          label="Coverage Mix"
+          value={formatPercent(coverage.automationReadyRate)}
+          detail={`${coverage.automaticCount} automatic / ${coverage.assistedCount} assisted`}
+        />
+        <CoverageStat
+          label="Manual / Blocked"
+          value={`${coverage.manualCount} / ${coverage.blockedCount}`}
+          detail="Brokers still requiring manual work or current blocker triage"
+        />
+        <CoverageStat
+          label="Handoff Rate"
+          value={formatPercent(coverage.handoffRate)}
+          detail={`${coverage.handoffCount} automation-created chores`}
+        />
+        <CoverageStat
+          label="Queue Pressure"
+          value={`${coverage.queuedJobs} queued`}
+          detail={`${coverage.runningJobs} running / ${coverage.failedJobs} failed jobs`}
+        />
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[0.8fr_1.6fr]">
+        <div
+          className="rounded-xl border p-4"
+          style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}
+        >
+          <h3 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+            Status Mix
+          </h3>
+          <div className="mt-4 space-y-3">
+            <CoverageMeter
+              label="Automatic"
+              count={coverage.automaticCount}
+              total={coverage.activeBrokerCount}
+              tone="automatic"
+            />
+            <CoverageMeter
+              label="Assisted"
+              count={coverage.assistedCount}
+              total={coverage.activeBrokerCount}
+              tone="assisted"
+            />
+            <CoverageMeter
+              label="Blocked"
+              count={coverage.blockedCount}
+              total={coverage.activeBrokerCount}
+              tone="blocked"
+            />
+            <CoverageMeter
+              label="Manual"
+              count={coverage.manualCount}
+              total={coverage.activeBrokerCount}
+              tone="manual"
+            />
+          </div>
+          <div
+            className="mt-4 rounded-lg border px-3 py-2 text-xs"
+            style={{
+              borderColor: "var(--border)",
+              background: "var(--surface)",
+              color: "var(--text-muted)",
+            }}
+          >
+            Most common blocker:{" "}
+            <span style={{ color: "var(--text)" }}>
+              {coverage.mostCommonBlocker
+                ? `${coverage.mostCommonBlocker.blockerType.replace(/_/g, " ")} (${coverage.mostCommonBlocker.count})`
+                : "none recorded"}
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left" style={{ color: "var(--text-faint)" }}>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <th className="pb-3 pr-4 font-medium">Broker</th>
+                <th className="pb-3 pr-4 font-medium">Coverage</th>
+                <th className="pb-3 pr-4 font-medium">Handoffs</th>
+                <th className="pb-3 pr-4 font-medium">Blockers</th>
+                <th className="pb-3 pr-4 font-medium">Queue</th>
+                <th className="pb-3 pr-4 font-medium">Next Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleBrokers.map((broker) => (
+                <CoverageRow key={broker.brokerId} broker={broker} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CoverageStat({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div
+      className="rounded-xl border p-4"
+      style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}
+    >
+      <p className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-faint)" }}>
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>
+        {value}
+      </p>
+      <p className="mt-2 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function CoverageMeter({
+  label,
+  count,
+  total,
+  tone,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  tone: BrokerCoverageStatus;
+}) {
+  const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+  const toneStyle = coverageToneStyle(tone);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span style={{ color: "var(--text-2)" }}>{label}</span>
+        <span style={{ color: "var(--text-faint)" }}>
+          {count} / {total}
+        </span>
+      </div>
+      <div
+        className="mt-1 h-2 overflow-hidden rounded-full"
+        style={{ background: "var(--surface)" }}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${percent}%`, background: toneStyle.text }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CoverageRow({ broker }: { broker: BrokerCoverageMetric }) {
+  return (
+    <tr className="align-top" style={{ borderBottom: "1px solid var(--border)" }}>
+      <td className="py-4 pr-4">
+        <p className="font-medium" style={{ color: "var(--text)" }}>{broker.brokerName}</p>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+          {broker.domain} · {broker.category.replace(/_/g, " ")} · {broker.priority}
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+          Last automation: {formatNullableDateTime(broker.lastAutomationAt)}
+        </p>
+      </td>
+      <td className="py-4 pr-4">
+        <CoverageBadge status={broker.coverageStatus} label={broker.coverageLabel} />
+        <p className="mt-2 max-w-[14rem] text-xs leading-5" style={{ color: "var(--text-muted)" }}>
+          {broker.coverageReason}
+        </p>
+      </td>
+      <td className="py-4 pr-4" style={{ color: "var(--text-2)" }}>
+        {formatPercent(broker.handoffRate)}
+        <div className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+          {broker.handoffCount} of {broker.totalRequests} requests
+        </div>
+      </td>
+      <td className="py-4 pr-4">
+        {broker.blockerBreakdown.length === 0 ? (
+          <span className="text-xs" style={{ color: "var(--text-faint)" }}>None</span>
+        ) : (
+          <div className="space-y-1 text-xs" style={{ color: "var(--text-2)" }}>
+            {broker.blockerBreakdown.slice(0, 3).map((blocker) => (
+              <p key={blocker.blockerType}>
+                {blocker.blockerType.replace(/_/g, " ")} · {blocker.count}
+              </p>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="py-4 pr-4">
+        <div className="space-y-1 text-xs">
+          <p style={{ color: broker.automationJobCounts.queued > 0 ? "#fde68a" : "var(--text-faint)" }}>{broker.automationJobCounts.queued} queued</p>
+          <p style={{ color: broker.automationJobCounts.running > 0 ? "#a5f3fc" : "var(--text-faint)" }}>{broker.automationJobCounts.running} running</p>
+          <p style={{ color: broker.automationJobCounts.failed > 0 ? "#fca5a5" : "var(--text-faint)" }}>{broker.automationJobCounts.failed} failed</p>
+        </div>
+      </td>
+      <td className="py-4 pr-4">
+        <p className="max-w-[13rem] text-xs leading-5" style={{ color: "var(--text-2)" }}>
+          {broker.nextAction}
+        </p>
+      </td>
+    </tr>
+  );
+}
+
+function CoverageBadge({
+  status,
+  label,
+}: {
+  status: BrokerCoverageStatus;
+  label: string;
+}) {
+  const tone = coverageToneStyle(status);
+
+  return (
+    <span
+      className="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium"
+      style={{
+        background: tone.bg,
+        borderColor: tone.border,
+        color: tone.text,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function coverageToneStyle(status: BrokerCoverageStatus) {
+  switch (status) {
+    case "automatic":
+      return {
+        bg: "rgba(6,78,59,0.18)",
+        border: "rgba(6,95,70,0.45)",
+        text: "#6ee7b7",
+      };
+    case "assisted":
+      return {
+        bg: "rgba(30,64,175,0.18)",
+        border: "rgba(37,99,235,0.45)",
+        text: "#93c5fd",
+      };
+    case "blocked":
+      return {
+        bg: "rgba(120,53,15,0.2)",
+        border: "rgba(146,64,14,0.5)",
+        text: "#fdba74",
+      };
+    case "manual":
+      return {
+        bg: "rgba(71,85,105,0.2)",
+        border: "rgba(100,116,139,0.45)",
+        text: "#cbd5e1",
+      };
+  }
+}
+
 function WatchlistCard({ request }: { request: StalledRequestReport }) {
   const toneStyle =
     request.tone === "danger"
@@ -394,4 +695,8 @@ function formatDays(value: number | null): string {
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString();
+}
+
+function formatNullableDateTime(value: string | null): string {
+  return value ? formatDateTime(value) : "—";
 }

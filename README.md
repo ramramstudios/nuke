@@ -20,6 +20,7 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state, including CAPTCHA, bot-check, rate-limit, email-confirmation, identity-verification, profile-URL, and record-selection blockers.
 - Persists form-automation evidence for support review, including run IDs, artifact directories, screenshots, logs, metadata, trace paths, final URLs, blocker reasons, and timeline-visible evidence events.
 - Queues form automations as asynchronous database-backed jobs with retries, stale-lock recovery, concurrency controls, and per-broker cooldown throttling while keeping email broker requests immediate.
+- Shows operator coverage and handoff reporting on the metrics dashboard, including automatic, assisted, blocked, and manual broker status, blocker mix, queue pressure, and per-broker next actions.
 
 What is still limited today:
 
@@ -471,6 +472,7 @@ This is a prototype focused on architecture, not production readiness:
 - [x] Broker-specific assisted Playwright automation for the first priority waves with challenge-aware handoffs
 - [x] Persisted assisted-automation evidence for timeline and support review
 - [x] SQLite-backed async form automation queue with retry, stale-lock recovery, concurrency, and broker cooldown controls
+- [x] Coverage and handoff dashboard for automatic, assisted, blocked, and manual broker paths
 - [x] Real email sending via Resend or Gmail SMTP
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ dedicated worker backend
@@ -513,6 +515,7 @@ npm run smoke:p3c4   # Assisted automation smoke for Wave 2 broker coverage
 npm run smoke:p3c5   # Challenge classification and chore routing smoke test
 npm run smoke:p3c6   # Assisted-automation evidence persistence smoke test
 npm run smoke:p3c7   # Async automation queue and per-broker throttle smoke test
+npm run smoke:p3c8   # Coverage and handoff dashboard reporting smoke test
 npm run automation:install-browser  # Install Chromium for Playwright runs
 ```
 
