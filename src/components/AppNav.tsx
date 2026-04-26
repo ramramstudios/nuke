@@ -33,8 +33,6 @@ const NAV_LINKS: NavLink[] = [
     label: "Account",
     match: [
       "/dashboard/account",
-      "/dashboard/plan",
-      "/dashboard/managed-service",
       "/dashboard/profile",
     ],
   },
@@ -56,6 +54,7 @@ export function ThemeToggle() {
 
   return (
     <button
+      suppressHydrationWarning
       type="button"
       onClick={() => setTheme(nextTheme)}
       title={`Theme: ${labels[theme]}. Click for ${labels[nextTheme]}.`}

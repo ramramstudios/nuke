@@ -1,3 +1,5 @@
+# Suspending development due to realization of how instensive it would be to refine each broker's process, and the overwhelming number of brokers to keep of track of, and the fact that PII can pop up again on the same site and anywhere else, even after it gets deleted. It would take a constant running service to combat this issue.
+
 # NUKE (Networked User Knowledge Eraser)
 
 NUKE is a lightweight privacy tool that discovers where personal data is exposed online and orchestrates its removal across data broker networks. It combines automated workflows, centralized request dispatching (inspired by California's DROP platform), and guided manual actions when automation isn't possible.
