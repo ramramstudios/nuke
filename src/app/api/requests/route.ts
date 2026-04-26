@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth/jwt";
+import { enqueueAutomationJobsForDeletionRequest } from "@/lib/automation/queue";
 import { submitDeletionRequest } from "@/lib/dispatcher/dispatch";
 import { processAllPending } from "@/lib/removal/engine";
 import { isFormAutomationEnabled } from "@/lib/automation/config";
@@ -13,13 +14,18 @@ export async function POST() {
   }
 
   const result = await submitDeletionRequest(userId);
-  const methods = isFormAutomationEnabled() ? ["email", "form"] : ["email"];
+  const formAutomationEnabled = isFormAutomationEnabled();
+  const methods = ["email"];
   const processed = await processAllPending(result.deletionRequestId, {
     methods,
   });
+  const automationQueue = formAutomationEnabled
+    ? await enqueueAutomationJobsForDeletionRequest(result.deletionRequestId)
+    : { enqueued: 0, existing: 0, skipped: 0 };
 
   return NextResponse.json({
     ...result,
+    automationQueue,
     processedMethods: methods,
     processedRequests: processed.processed,
   });

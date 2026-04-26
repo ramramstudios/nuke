@@ -131,6 +131,7 @@ model RemovalRequest {
   retryAttempts      RemovalRetryAttempt[]
   tasks              UserTask[]
   automationEvidence AutomationEvidence[]
+  automationJobs     AutomationJob[]
 }
 
 model AutomationEvidence {
@@ -163,6 +164,33 @@ model AutomationEvidence {
   startedAt  DateTime
   finishedAt DateTime
   capturedAt DateTime @default(now())
+}
+
+model AutomationJob {
+  id               String         @id @default(cuid())
+  removalRequestId String
+  removalRequest   RemovalRequest @relation(fields: [removalRequestId], references: [id], onDelete: Cascade)
+
+  status      String   @default("queued")
+  // queued | running | succeeded | failed | canceled
+  priority    Int      @default(0)
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(2)
+  nextRunAt   DateTime @default(now())
+
+  lockedAt       DateTime?
+  lockedBy       String?
+  lastStartedAt  DateTime?
+  lastFinishedAt DateTime?
+  completedAt    DateTime?
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([removalRequestId])
+  @@index([status, nextRunAt])
+  @@index([lockedBy, lockedAt])
 }
 
 model RemovalRetryAttempt {

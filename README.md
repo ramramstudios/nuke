@@ -19,11 +19,12 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Includes a Playwright form-automation foundation with reusable browser-session helpers, artifact capture, and a form-foundation smoke test.
 - Converts blocked broker automations into explicit user chores with blocker reasons, direct handoff links, and evidence-backed request state, including CAPTCHA, bot-check, rate-limit, email-confirmation, identity-verification, profile-URL, and record-selection blockers.
 - Persists form-automation evidence for support review, including run IDs, artifact directories, screenshots, logs, metadata, trace paths, final URLs, blocker reasons, and timeline-visible evidence events.
+- Queues form automations as asynchronous database-backed jobs with retries, stale-lock recovery, concurrency controls, and per-broker cooldown throttling while keeping email broker requests immediate.
 
 What is still limited today:
 
 - Scan/discovery is still simulated.
-- Form broker execution now includes broker-specific assisted flows for Spokeo, Advanced Background Checks, FamilyTreeNow, Nuwber, SmartBackgroundChecks, and That's Them. They reach the farthest reliable step automatically, then hand the user into the exact remaining chore with blocker classification and evidence. FastPeopleSearch still has an experimental runner, but live bot-check challenges make it a weaker practical target right now.
+- Form broker execution now includes broker-specific assisted flows for Spokeo, Advanced Background Checks, FamilyTreeNow, Nuwber, SmartBackgroundChecks, and That's Them. They run through the automation queue, reach the farthest reliable step automatically, then hand the user into the exact remaining chore with blocker classification and evidence. FastPeopleSearch still has an experimental runner, but live bot-check challenges make it a weaker practical target right now.
 - Reply classification is rule-based and will need tuning as real broker traffic accumulates.
 - Many brokers are form-driven or verification-driven flows, so “real automation” is currently strongest for the vetted email subset.
 - Managed-service billing is manual for the pilot cohort; Stripe/self-serve subscription checkout is still future work.
@@ -232,7 +233,7 @@ Each broker defines: domain, search method, removal method, SLA, tier, priority,
 
 ```
 1. API (programmatic DELETE)
-2. Form (Playwright foundation in place; broker-specific flows still pending)
+2. Form (queued Playwright-assisted automation when enabled)
 3. Email (structured deletion request)
 4. Manual Link (discovers opt-out URL, shows to user)
 ```
@@ -415,7 +416,7 @@ Broker simulation is disabled by default for cron-driven maintenance. Set `ENABL
 - No operator UI for reviewing escalated requests yet (chunk 8)
 - Retry schedule is code-defined, not configurable per-broker
 - Follow-up copy is stage-aware but still generic across brokers
-- No Redis/BullMQ — retries run synchronously within the cron cycle
+- No Redis/BullMQ yet — email retries still run synchronously within the cron cycle
 
 ---
 
@@ -458,7 +459,7 @@ This is a prototype focused on architecture, not production readiness:
 - **No real identity verification** — accounts auto-verify on registration
 - **Managed-service billing is manual** — the pilot supports seat reservation and payment/status tracking, but not a real checkout processor yet
 - **No cross-user operator console** — the pilot package is tracked per account today, not through a true admin role dashboard
-- **No Redis/BullMQ** — background jobs run synchronously via API calls
+- **No Redis/BullMQ** — form automation has an SQLite-backed queue for the MVP; a dedicated worker backend is still future work
 - **SQLite** — swap to PostgreSQL for production (`DATABASE_URL` in `.env`)
 
 ---
@@ -469,9 +470,10 @@ This is a prototype focused on architecture, not production readiness:
 - [x] Playwright form automation foundation and smoke path
 - [x] Broker-specific assisted Playwright automation for the first priority waves with challenge-aware handoffs
 - [x] Persisted assisted-automation evidence for timeline and support review
+- [x] SQLite-backed async form automation queue with retry, stale-lock recovery, concurrency, and broker cooldown controls
 - [x] Real email sending via Resend or Gmail SMTP
 - [ ] Email-based identity verification
-- [ ] Redis + BullMQ for async job processing
+- [ ] Redis + BullMQ dedicated worker backend
 - [ ] PostgreSQL migration
 
 ### Mid-term
@@ -507,6 +509,10 @@ npm run db:studio    # Open Prisma Studio (GUI)
 npm run db:reset     # Reset DB + re-seed
 npm run smoke:email  # Live email smoke test for one email broker
 npm run smoke:form   # Playwright foundation smoke test for one form broker
+npm run smoke:p3c4   # Assisted automation smoke for Wave 2 broker coverage
+npm run smoke:p3c5   # Challenge classification and chore routing smoke test
+npm run smoke:p3c6   # Assisted-automation evidence persistence smoke test
+npm run smoke:p3c7   # Async automation queue and per-broker throttle smoke test
 npm run automation:install-browser  # Install Chromium for Playwright runs
 ```
 
@@ -523,7 +529,7 @@ npm run automation:install-browser  # Install Chromium for Playwright runs
 | Encryption | AES-256-GCM (Node crypto) |
 | Validation | Zod |
 | Styling | Tailwind CSS 4 |
-| Jobs (planned) | BullMQ + Redis |
+| Jobs | SQLite-backed MVP queue; BullMQ + Redis planned |
 | Automation | Playwright |
 
 ---

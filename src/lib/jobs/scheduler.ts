@@ -13,6 +13,10 @@
 
 import { prisma } from "@/lib/db";
 import { isFormAutomationEnabled } from "@/lib/automation/config";
+import {
+  enqueuePendingAutomationJobs,
+  runAutomationQueue,
+} from "@/lib/automation/queue";
 import { runScan } from "@/lib/crawler/scanner";
 import { processAllPending } from "@/lib/removal/engine";
 import { flagOverdueRequests, simulateBrokerResponses } from "@/lib/compliance/tracker";
@@ -54,13 +58,26 @@ export async function processAllPendingRemovals(): Promise<{ processed: number }
   });
 
   let total = 0;
-  const methods = isFormAutomationEnabled() ? undefined : ["email"];
   for (const dr of active) {
-    const result = await processAllPending(dr.id, { methods });
+    const result = await processAllPending(dr.id, { methods: ["email"] });
     total += result.processed;
   }
 
   return { processed: total };
+}
+
+export async function processAutomationJobs() {
+  if (!isFormAutomationEnabled()) {
+    return {
+      enqueue: { enqueued: 0, existing: 0, skipped: 0 },
+      run: { completed: 0, errors: 0, retried: 0, started: 0, throttled: 0 },
+    };
+  }
+
+  const enqueue = await enqueuePendingAutomationJobs();
+  const run = await runAutomationQueue();
+
+  return { enqueue, run };
 }
 
 /**
@@ -70,6 +87,7 @@ export async function runMaintenanceCycle() {
   const overdue = await flagOverdueRequests();
   const scans = await runRecurringScans();
   const removals = await processAllPendingRemovals();
+  const automationQueue = await processAutomationJobs();
   const retries = await processRetries();
 
   // MVP simulator only runs when explicitly enabled.
@@ -85,6 +103,7 @@ export async function runMaintenanceCycle() {
     simulated,
     scans,
     removals,
+    automationQueue,
     retries,
   };
 }
