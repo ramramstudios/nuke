@@ -19,6 +19,7 @@
     "smoke:p3c6": "node --import tsx scripts/p3c6-evidence-smoke.ts",
     "smoke:p3c7": "node --import tsx scripts/p3c7-queue-smoke.ts",
     "smoke:p3c8": "node --import tsx scripts/p3c8-coverage-smoke.ts",
+    "smoke:p3c9": "node --import tsx scripts/p3c9-plan-smoke.ts",
     "automation:install-browser": "npx playwright install chromium"
   },
   "dependencies": {

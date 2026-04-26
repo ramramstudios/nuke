@@ -24,6 +24,7 @@ model User {
   scans                     Scan[]
   tasks                     UserTask[]
   managedServiceEnrollments ManagedServiceEnrollment[]
+  planSelections            SelfServePlanSelection[]
 }
 
 // PII fields stored as encrypted JSON blobs
@@ -354,6 +355,42 @@ model ManagedServiceEnrollment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Self-Serve Assisted-Removal Plan ────────────────────────
+
+model SelfServePlanSelection {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planKey String
+  // free-self-serve | assisted-self-serve | concierge-managed
+
+  status String @default("active")
+  // active | superseded | canceled
+
+  // Snapshot of coverage at the time the user picked the plan, so we can
+  // explain later why this plan was a fit for their account state.
+  automaticBrokerCount Int @default(0)
+  choreBrokerCount     Int @default(0)
+  managedBrokerCount   Int @default(0)
+  totalBrokerCount     Int @default(0)
+
+  acknowledgedChoreScope     Boolean @default(false)
+  acknowledgedManagedHandoff Boolean @default(false)
+
+  // Optional human-readable note from the user when they selected the plan.
+  notes String?
+
+  selectedAt   DateTime  @default(now())
+  supersededAt DateTime?
+  canceledAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
 }
 
 // ─── Custom / Ad-hoc Removal Requests ───────────────────────

@@ -21,6 +21,7 @@ NUKE is a lightweight privacy tool that discovers where personal data is exposed
 - Persists form-automation evidence for support review, including run IDs, artifact directories, screenshots, logs, metadata, trace paths, final URLs, blocker reasons, and timeline-visible evidence events.
 - Queues form automations as asynchronous database-backed jobs with retries, stale-lock recovery, concurrency controls, and per-broker cooldown throttling while keeping email broker requests immediate.
 - Shows operator coverage and handoff reporting on the metrics dashboard, including automatic, assisted, blocked, and manual broker status, blocker mix, queue pressure, and per-broker next actions.
+- Packages the operator coverage data into a consumer-ready self-serve plan view that splits brokers into automatic, quick-chore, and managed-help buckets, recommends the right plan tier for the account, persists the user's plan selection with a coverage snapshot, and links concierge plan members to the existing managed-service pilot for hard handoffs.
 
 What is still limited today:
 
@@ -444,6 +445,28 @@ This is intentionally a pilot workflow, not a full self-serve checkout product. 
 
 ---
 
+## Self-Serve Plan Packaging (Phase 3)
+
+NUKE now translates the operator-side coverage report into a consumer-ready plan view at `/dashboard/plan`. Every active broker is mapped into one of three buckets so the user sees concrete coverage instead of abstract automation claims.
+
+### Coverage buckets
+
+- **Automatic** — Email and API brokers, plus form runners that have not been blocked recently. NUKE handles these end-to-end.
+- **Quick chore** — Form runners that may pause for a CAPTCHA, confirmation link, or listing pick, and `manual_link` brokers. The user finishes the last step from the dashboard chore.
+- **Managed help** — Brokers with structural blockers (BeenVerified, Intelius, Whitepages-style flows) and any broker whose recent automation runs have been classified as blocked. The concierge plan picks these up; on lower plans the user still has the option to finish them themselves.
+
+### Plan tiers
+
+| Plan | Price | What it covers automatically | What the user still does |
+|---|---|---|---|
+| Self-Serve Free | Free | Automatic broker submissions | Finishes their own quick-chore and managed-help brokers |
+| Assisted Self-Serve | `$9/mo` | Automatic submissions plus chore reminders, broker-specific copy, stalled-request triage | Finishes their own chore and managed-help brokers (chores are easier to keep on top of) |
+| Concierge Managed | `$29/mo` | Everything in Assisted Self-Serve plus the existing managed-service pilot picks up chore and managed-help brokers | Nothing routine; some structurally hard brokers (notarized ID, telephony) are still surfaced as user-action chores |
+
+The plan page shows a recommended tier based on the user's current bucket mix, persists the selection to `SelfServePlanSelection` with a coverage snapshot from the moment the user picked the plan, and links concierge plan members to the existing `/dashboard/managed-service` flow for the manual-invoice handoff until self-serve checkout ships.
+
+---
+
 ## MVP Limitations
 
 This is a prototype focused on architecture, not production readiness:
@@ -473,6 +496,7 @@ This is a prototype focused on architecture, not production readiness:
 - [x] Persisted assisted-automation evidence for timeline and support review
 - [x] SQLite-backed async form automation queue with retry, stale-lock recovery, concurrency, and broker cooldown controls
 - [x] Coverage and handoff dashboard for automatic, assisted, blocked, and manual broker paths
+- [x] Self-serve assisted-removal plan packaging with broker buckets, plan recommendation, and persisted selection
 - [x] Real email sending via Resend or Gmail SMTP
 - [ ] Email-based identity verification
 - [ ] Redis + BullMQ dedicated worker backend
@@ -516,6 +540,7 @@ npm run smoke:p3c5   # Challenge classification and chore routing smoke test
 npm run smoke:p3c6   # Assisted-automation evidence persistence smoke test
 npm run smoke:p3c7   # Async automation queue and per-broker throttle smoke test
 npm run smoke:p3c8   # Coverage and handoff dashboard reporting smoke test
+npm run smoke:p3c9   # Self-serve assisted-removal plan packaging smoke test
 npm run automation:install-browser  # Install Chromium for Playwright runs
 ```
 
